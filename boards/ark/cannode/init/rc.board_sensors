@@ -87,6 +87,12 @@ then
 	ms5525dso start -X
 fi
 
+# DWM1004C gps fake sensor external I2C
+if param compare -s SENS_EN_DWM1004C 1
+then
+	dwm1004c start -X
+fi
+
 # IR-LOCK sensor external I2C
 if param compare -s SENS_EN_IRLOCK 1
 then

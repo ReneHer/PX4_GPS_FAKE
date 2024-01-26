@@ -1,0 +1,9 @@
+menu "Gps fake"
+    menuconfig COMMON_GPS_FAKE
+        bool "Common gps fake module's"
+        default n
+        select DRIVERS_GPS_FAKE_DWM1004C
+        ---help---
+            Enable default set of gps fake drivers
+    rsource "*/Kconfig"
+endmenu

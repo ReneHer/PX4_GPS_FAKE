@@ -1,0 +1,5 @@
+menuconfig EXAMPLES_FAKE_GPS_UWB
+	bool "fake_gps_uwb"
+	default n
+	---help---
+		Enable support for fake_gps_uwb

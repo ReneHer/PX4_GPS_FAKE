@@ -1,0 +1,5 @@
+menuconfig DRIVERS_GPS_FAKE_DWM1004C
+	bool "dwm1004c"
+	default n
+	---help---
+		Enable support for dwm1004c

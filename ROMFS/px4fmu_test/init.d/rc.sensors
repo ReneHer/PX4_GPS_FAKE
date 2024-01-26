@@ -28,6 +28,10 @@ if ms4525do start -X
 then
 fi
 
+if dwm1004c start -X
+then
+fi
+
 if ets_airspeed start -X
 then
 fi
