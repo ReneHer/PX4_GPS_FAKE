@@ -47,7 +47,7 @@
 #include <uORB/topics/sensor_gps.h>
 
 
-#define LOCODECK_NR_OF_TWR_ANCHORS	8
+#define LOCODECK_NR_OF_TWR_ANCHORS	7 // 8
 #define DATA_RX_LENGTH				1 + 1 + LOCODECK_NR_OF_TWR_ANCHORS * sizeof(float) + 2
 
 
@@ -95,6 +95,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		{
 			MEASURE,
 			READ,
+			PUBLISH,
 		} _state{STATE::MEASURE};
 
 		enum class STATUS : uint8_t
@@ -130,7 +131,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			{0.330000, 1.490000, 2.220000},
 			{0.370000, 6.500000, 0.160000},
 			{4.470000, 6.510000, 2.250000},
-			{4.470000, 1.510000, 0.160000}
+			// {4.470000, 1.510000, 0.160000}
 		};
 
 		/*static constexpr*/ const float x_0_data[3] = {2.45, 4.10, 1.0};
@@ -142,6 +143,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		Vector3f vel_N;
 		Vector3d lla_0;
 
+		int8_t anchors_used_sum = 0;
 		bool check_data = false;
 		bool check_inverse = false;
 		int measurements_good = 0;
