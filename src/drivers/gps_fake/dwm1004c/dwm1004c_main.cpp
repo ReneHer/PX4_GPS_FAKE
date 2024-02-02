@@ -49,6 +49,7 @@ void DWM1004C::print_usage()
 	PX4_INFO_RAW("\n");
 }
 
+
 extern "C" int dwm1004c_main(int argc, char *argv[])
 {
 	using ThisDriver = DWM1004C;

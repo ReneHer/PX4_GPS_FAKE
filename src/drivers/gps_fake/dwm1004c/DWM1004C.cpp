@@ -54,6 +54,21 @@ DWM1004C::~DWM1004C()
 }
 
 
+// void DWM1004C::print_usage()
+// {
+// 	PX4_INFO_RAW("\n");
+
+// 	PRINT_MODULE_USAGE_NAME("dwm1004c", "driver");
+// 	// PRINT_MODULE_USAGE_SUBCATEGORY("gps");
+// 	PRINT_MODULE_USAGE_COMMAND("start");
+// 	PRINT_MODULE_USAGE_PARAMS_I2C_SPI_DRIVER(true, false);
+// 	PRINT_MODULE_USAGE_PARAMS_I2C_ADDRESS(I2C_ADDRESS_DEFAULT); // 0x28);
+// 	PRINT_MODULE_USAGE_DEFAULT_COMMANDS();
+
+// 	PX4_INFO_RAW("\n");
+// }
+
+
 int DWM1004C::init()
 {
 	int ret = I2C::init();
@@ -96,6 +111,8 @@ void DWM1004C::RunImpl()
 				// Send the command to begin a measurement (Read_MR)
 				uint8_t cmd = ADDR_READ_MR;
 
+				anchors_used_sum = 0;
+
 				if (dwm_errors == MAX_ERRORS)
 				{
 					cmd = DW_RESET;
@@ -116,11 +133,10 @@ void DWM1004C::RunImpl()
 				{
 					perf_count(_comms_errors);
 					dwm_errors++;
-					_state = STATE::MEASURE;
-					ScheduleDelayed(10_ms); // try again in 10 ms
-					anchors_used_sum = 0;
-					// _state = STATE::PUBLISH;
-					// ScheduleDelayed(2_ms);
+					// _state = STATE::MEASURE;
+					// ScheduleDelayed(10_ms); // try again in 10 ms
+					_state = STATE::PUBLISH;
+					ScheduleDelayed(2_ms);
 				}
 			}
 
@@ -193,15 +209,15 @@ void DWM1004C::RunImpl()
 					// uint32_t measurement_end_1 = measurement_1(LOCODECK_NR_OF_TWR_ANCHORS);
 					// uint32_t measurement_end_2 = measurement_2(LOCODECK_NR_OF_TWR_ANCHORS);
 
-					PX4_INFO_RAW("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X\n", status_1, status_2, anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2); // LOCODECK_NR_OF_TWR_ANCHORS,
-					for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
-					{
-						PX4_INFO_RAW("anchors_used[%d] = %d\n", i, anchors_used(i));
-					}
-					for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
-					{
-						PX4_INFO_RAW("measurement_1[%d] = %f\n", i, (double)measurement_1(i));
-					}
+					// PX4_INFO_RAW("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X\n", status_1, status_2, anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2); // LOCODECK_NR_OF_TWR_ANCHORS,
+					// for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
+					// {
+					// 	PX4_INFO_RAW("anchors_used[%d] = %d\n", i, anchors_used(i));
+					// }
+					// for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
+					// {
+					// 	PX4_INFO_RAW("measurement_1[%d] = %f\n", i, (double)measurement_1(i));
+					// }
 
 					if ((status_1 == (uint8_t)STATUS::Fault_Detected) || (status_2 == (uint8_t)STATUS::Fault_Detected))
 					{
@@ -226,7 +242,7 @@ void DWM1004C::RunImpl()
 						{
 							measurements_good++;
 
-							PX4_INFO_RAW("anchors_used_sum = %d\n", anchors_used_sum);
+							// PX4_INFO_RAW("anchors_used_sum = %d\n", anchors_used_sum);
 
 							double delta_i = 10.0;
 							uint8_t i = 0;
@@ -271,6 +287,8 @@ void DWM1004C::RunImpl()
 						PX4_DEBUG("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X", status_1, status_2,
 							anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2); // LOCODECK_NR_OF_TWR_ANCHORS,
 							//(double)measurement_1(LOCODECK_NR_OF_TWR_ANCHORS), (double)measurement_2(LOCODECK_NR_OF_TWR_ANCHORS));
+
+						perf_count(_comms_errors);
 						dwm_errors++;
 
 						PX4_INFO_RAW("Error: Status, Anchors, Checksum or Measurement not OK\n");
@@ -303,8 +321,8 @@ void DWM1004C::RunImpl()
 				// device id
 				device::Device::DeviceId device_id;
 				device_id.devid_s.bus_type = device::Device::DeviceBusType::DeviceBusType_I2C; // DeviceBusType_UNKNOWN
-				device_id.devid_s.bus = 0;
-				device_id.devid_s.address = 0;
+				device_id.devid_s.bus = 2; // 0;
+				device_id.devid_s.address = I2C_ADDRESS_DEFAULT; // 0;
 				device_id.devid_s.devtype = DRV_GPS_DEVTYPE_DWM1004C;
 
 				sensor_gps_s sensor_gps{};
@@ -368,18 +386,20 @@ void DWM1004C::RunImpl()
 				*/
 				sensor_gps.timestamp = hrt_absolute_time();
 
-				// if (hrt_elapsed_time(&_timestamp_sample) < 20_ms)
-				// {
-				//
-				// }
-				// _sensor_gps_pub.publish(sensor_gps);
+				if (hrt_elapsed_time(&_timestamp_sample) < 20_ms)
+				{
+					_sensor_gps_pub.publish(sensor_gps);
+					// PX4_INFO_RAW("elsapsed time = %lld\n", hrt_elapsed_time(&_timestamp_sample));
+				}
 
-				PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
+				// PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
 
 				_state = STATE::MEASURE;
 				// ScheduleDelayed(10_ms);
 
-				ScheduleDelayed(5000_ms);
+				// listener(ORB_ID(sensor_gps), 1 , -1, 0);
+				ScheduleDelayed(196_ms); // 5 Hz mit anderen delays 2 x 2ms
+				// ScheduleDelayed(590_ms);
 
 				break;
 			}
@@ -581,8 +601,8 @@ void DWM1004C::print_status()
 	perf_print_counter(_fault_perf);
 
 	PX4_INFO_RAW("\nModule Counters:\n");
-	perf_print_counter(_loop_perf);
 	perf_print_counter(_loop_interval_perf);
+	perf_print_counter(_loop_perf);
 
 	PX4_INFO_RAW("\n");
 }

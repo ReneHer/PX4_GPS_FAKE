@@ -46,6 +46,9 @@
 #include <uORB/PublicationMulti.hpp>
 #include <uORB/topics/sensor_gps.h>
 
+// #include <systemcmds/topic_listener/topic_listener.hpp>
+
+
 
 #define LOCODECK_NR_OF_TWR_ANCHORS	7 // 8
 #define DATA_RX_LENGTH				1 + 1 + LOCODECK_NR_OF_TWR_ANCHORS * sizeof(float) + 2
@@ -131,7 +134,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			{0.330000, 1.490000, 2.220000},
 			{0.370000, 6.500000, 0.160000},
 			{4.470000, 6.510000, 2.250000},
-			// {4.470000, 1.510000, 0.160000}
+			// {4.470000, 1.510000, 0.160000},
 		};
 
 		/*static constexpr*/ const float x_0_data[3] = {2.45, 4.10, 1.0};
