@@ -49,9 +49,16 @@
 // #include <systemcmds/topic_listener/topic_listener.hpp>
 
 
+#define DEBUG_MODE_ON
 
-#define LOCODECK_NR_OF_TWR_ANCHORS	7 // 8
-#define DATA_RX_LENGTH				1 + 1 + LOCODECK_NR_OF_TWR_ANCHORS * sizeof(float) + 2
+#define LOCODECK_NR_OF_TWR_ANCHORS	2 // 7 // 8
+
+#define DWM1004C_PROBE 			0x00
+#define DWM1004C_TRANSMIT 		0x99
+#define DWM1004C_RESET 			0xFF
+#define DWM1004C_DATA_LENGTH	1 + 1 + LOCODECK_NR_OF_TWR_ANCHORS * sizeof(double) + 2
+
+#define MAX_ERRORS 10
 
 
 using namespace time_literals;
@@ -59,14 +66,7 @@ using namespace matrix;
 
 
 static constexpr uint32_t I2C_SPEED = 100 * 1000; // 100 kHz I2C serial interface
-static constexpr uint8_t I2C_ADDRESS_DEFAULT = 0x28;
-
-
-/* Register address */
-#define ADDR_READ_MR 0x99
-
-#define DW_RESET 0xFF
-#define MAX_ERRORS 10
+static constexpr uint8_t I2C_ADDRESS_DEFAULT = 0x5A; //0x28;
 
 
 class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
@@ -90,7 +90,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 
 		int probe() override;
 
-		Vector3f dme_least_squares(const Vector3f &x_ccf_i, const Matrix<float, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<float, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed);
+		Vector3d dme_least_squares(const Vector3d &x_ccf_i, const Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed);
 
 		void flat_earth_to_lla(double lat_ref, double lon_ref, double alt_ref, double x_fe, double y_fe, double z_fe, double Psi, double &lat, double &lon, double &alt);
 
@@ -110,6 +110,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		};
 
 		hrt_abstime _timestamp_sample{0};
+		hrt_abstime _timestamp_velocity{0};
 
 		// Publications
 		uORB::PublicationMulti<sensor_gps_s> _sensor_gps_pub{ORB_ID(sensor_gps)};
@@ -122,28 +123,35 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		perf_counter_t	_loop_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
 		perf_counter_t	_loop_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": interval")};
 
-		// static constexpr uint32_t SENSOR_INTERVAL_US{1000000 / 5}; // 5 Hz
-		static constexpr uint32_t SENSOR_INTERVAL_US{9000000 / 1};
+		static constexpr uint32_t SENSOR_INTERVAL_US{1000000 / 5}; // 5 Hz
 
-		/*static constexpr*/ const float anchorPosition_data[LOCODECK_NR_OF_TWR_ANCHORS][3] =
+		/*static constexpr*/ const double anchorPosition_data[LOCODECK_NR_OF_TWR_ANCHORS][3] =
 			{
-			{0.330000, 1.490000, 0.160000},
-			{0.370000, 6.500000, 2.250000},
-			{4.470000, 6.490000, 0.160000},
-			{4.470000, 1.510000, 2.100000},
-			{0.330000, 1.490000, 2.220000},
-			{0.370000, 6.500000, 0.160000},
-			{4.470000, 6.510000, 2.250000},
+			{3.1900, 0.0000, 2.0500},
+			{3.1900, 0.0000, 0.1200},
+			{2.7300, 6.6550, 1.7850},
+			{2.7400, 6.6550, 0.1750},
+			{0.3000, 6.6300, 1.7750},
+			{0.5100, 6.5000, 0.1600},
+			{0.9100, 0.8750, 2.0450},
+			{0.9050, 0.8750, 0.1600},
+			// {0.330000, 1.490000, 0.160000},
+			// {0.370000, 6.500000, 2.250000},
+			// {4.470000, 6.490000, 0.160000},
+			// {4.470000, 1.510000, 2.100000},
+			// {0.330000, 1.490000, 2.220000},
+			// {0.370000, 6.500000, 0.160000},
+			// {4.470000, 6.510000, 2.250000},
 			// {4.470000, 1.510000, 0.160000},
 		};
 
-		/*static constexpr*/ const float x_0_data[3] = {2.45, 4.10, 1.0};
-		/*static constexpr*/ const float vel_N_data[3] = {0.0, 0.0, 0.0};
+		/*static constexpr*/ const double x_0_data[3] = {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
+		/*static constexpr*/ const double vel_N_data[3] = {0.0, 0.0, 0.0};
 
 		/*static constexpr*/ const double lla_0_data[3] = {47.397742, 8.545594, 488.003000};
 
-		Vector3f x_N;
-		Vector3f vel_N;
+		Vector3d x_N;
+		Vector3d vel_N;
 		Vector3d lla_0;
 
 		int8_t anchors_used_sum = 0;

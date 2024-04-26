@@ -81,11 +81,13 @@ int DWM1004C::init()
 
 	if (ret == PX4_OK)
 	{
-		ScheduleNow();
+		// ScheduleNow();
+		// alternatively, Run on fixed interval
+		ScheduleOnInterval(SENSOR_INTERVAL_US/3);//, SENSOR_INTERVAL_US/3);
 	}
 
-	x_N = Vector3f(x_0_data);
-	vel_N = Vector3f(vel_N_data);
+	x_N = Vector3d(x_0_data);
+	vel_N = Vector3d(vel_N_data);
 	lla_0 = Vector3d(lla_0_data);
 
 	anchors_used_sum = 0;
@@ -97,8 +99,14 @@ int DWM1004C::init()
 
 void DWM1004C::RunImpl()
 {
+	if (should_exit()) {
+		ScheduleClear();
+		exit_and_cleanup();
+		return;
+	}
+
 	perf_begin(_loop_perf);
-	perf_count(_loop_interval_perf);
+	// perf_count(_loop_interval_perf);
 
 	// uint8_t anchors_used_sum = 0;
 
@@ -109,17 +117,17 @@ void DWM1004C::RunImpl()
 		case STATE::MEASURE:
 			{
 				// Send the command to begin a measurement (Read_MR)
-				uint8_t cmd = ADDR_READ_MR;
+				uint8_t cmd = DWM1004C_TRANSMIT;
 
 				anchors_used_sum = 0;
 
 				if (dwm_errors == MAX_ERRORS)
 				{
-					cmd = DW_RESET;
+					cmd = DWM1004C_RESET;
 					transfer(&cmd, 1, nullptr, 0);
 					dwm_errors = 0;
 					ScheduleDelayed(10_ms); // try again in 10 ms
-					cmd = ADDR_READ_MR;
+					cmd = DWM1004C_TRANSMIT;
 				}
 
 				if (transfer(&cmd, 1, nullptr, 0) == OK)
@@ -148,10 +156,10 @@ void DWM1004C::RunImpl()
 				//  1st read: require status = Normal Operation. Good Data Packet
 				//  2nd read: require status = Stale Data, data should match first read
 				perf_begin(_sample_perf);
-				uint8_t data_1[DATA_RX_LENGTH] {};
+				uint8_t data_1[DWM1004C_DATA_LENGTH] {};
 				int ret1 = transfer(nullptr, 0, &data_1[0], sizeof(data_1));
 
-				uint8_t data_2[DATA_RX_LENGTH] {};
+				uint8_t data_2[DWM1004C_DATA_LENGTH] {};
 				int ret2 = transfer(nullptr, 0, &data_2[0], sizeof(data_2));
 				perf_end(_sample_perf);
 
@@ -171,7 +179,7 @@ void DWM1004C::RunImpl()
 					const uint8_t anchors_used_data_2 = data_2[1];
 
 					Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> anchors_used;
-					for (int8_t i = LOCODECK_NR_OF_TWR_ANCHORS-1; i >= 0; i--) // Vergleich mit Code bei DWM1004C: Byte wird von vorn order hinten befüllt??
+					for (int8_t i = LOCODECK_NR_OF_TWR_ANCHORS-1; i >= 0; i--) // TODO: Vergleich mit Code bei DWM1004C: Byte wird von vorn order hinten befüllt??
 					{
 						anchors_used(i) = (anchors_used_data_1 >> i) & 0x01;
 					}
@@ -179,28 +187,28 @@ void DWM1004C::RunImpl()
 					// 8 x 4 Byte Distance
 					// Distance_1  data[2:5],  Distance_2 data [6:9],  Distance_3 data[10:13], Distance_4 data[14:17],
 					// Distance_5 data[18:21], Distance_6 data[22:25], Distance_7 data[26:29], Distance_8 data[30:33]
-					Vector<float, LOCODECK_NR_OF_TWR_ANCHORS> measurement_1;
-					Vector<float, LOCODECK_NR_OF_TWR_ANCHORS> measurement_2;
+					Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> measurement_1;
+					Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> measurement_2;
 					for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 					{
-						memcpy(&measurement_1(i), data_1+(2+i*sizeof(float)), sizeof(float));
-						memcpy(&measurement_2(i), data_2+(2+i*sizeof(float)), sizeof(float));
+						memcpy(&measurement_1(i), data_1+(2+i*sizeof(double)), sizeof(double));
+						memcpy(&measurement_2(i), data_2+(2+i*sizeof(double)), sizeof(double));
 					}
 
 					// Checksum
-					const uint16_t checksum_1 = (data_1[DATA_RX_LENGTH-1] << 8) + data_1[DATA_RX_LENGTH-2];
-					const uint16_t checksum_2 = (data_2[DATA_RX_LENGTH-1] << 8) + data_2[DATA_RX_LENGTH-2];
-					// const uint8_t checksum_1_msb = data_1[DATA_RX_LENGTH-2];
-					// const uint8_t checksum_2_msb = data_2[DATA_RX_LENGTH-2];
+					const uint16_t checksum_1 = (data_1[DWM1004C_DATA_LENGTH-1] << 8) + data_1[DWM1004C_DATA_LENGTH-2];
+					const uint16_t checksum_2 = (data_2[DWM1004C_DATA_LENGTH-1] << 8) + data_2[DWM1004C_DATA_LENGTH-2];
+					// const uint8_t checksum_1_msb = data_1[DWM1004C_DATA_LENGTH-2];
+					// const uint8_t checksum_2_msb = data_2[DWM1004C_DATA_LENGTH-2];
 
-					// const uint8_t checksum_1_lsb = data_1[DATA_RX_LENGTH-1];
-					// const uint8_t checksum_2_lsb = data_2[DATA_RX_LENGTH-1];
+					// const uint8_t checksum_1_lsb = data_1[DWM1004C_DATA_LENGTH-1];
+					// const uint8_t checksum_2_lsb = data_2[DWM1004C_DATA_LENGTH-1];
 					// uint16_t checksum_1 = (checksum_1_msb << 8) + checksum_1_lsb;
 					// uint16_t checksum_2 = (checksum_2_msb << 8) + checksum_2_lsb;
 
 					uint16_t checksum_RX_1 = 0;
 					uint16_t checksum_RX_2 = 0;
-					for (uint8_t i = 1; i < DATA_RX_LENGTH-2; i++)
+					for (uint8_t i = 1; i < DWM1004C_DATA_LENGTH-2; i++)
 					{
 						checksum_RX_1 += data_1[i];
 						checksum_RX_2 += data_2[i];
@@ -209,15 +217,17 @@ void DWM1004C::RunImpl()
 					// uint32_t measurement_end_1 = measurement_1(LOCODECK_NR_OF_TWR_ANCHORS);
 					// uint32_t measurement_end_2 = measurement_2(LOCODECK_NR_OF_TWR_ANCHORS);
 
-					// PX4_INFO_RAW("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X\n", status_1, status_2, anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2); // LOCODECK_NR_OF_TWR_ANCHORS,
-					// for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
-					// {
-					// 	PX4_INFO_RAW("anchors_used[%d] = %d\n", i, anchors_used(i));
-					// }
-					// for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
-					// {
-					// 	PX4_INFO_RAW("measurement_1[%d] = %f\n", i, (double)measurement_1(i));
-					// }
+					#ifdef DEBUG_MODE_ON
+					PX4_INFO_RAW("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X\n", status_1, status_2, anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2); // LOCODECK_NR_OF_TWR_ANCHORS,
+					for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
+					{
+						PX4_INFO_RAW("anchors_used[%d] = %d\n", i, anchors_used(i));
+					}
+					for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
+					{
+						PX4_INFO_RAW("measurement_1[%d] = %f\n", i, (double)measurement_1(i));
+					}
+					#endif
 
 					if ((status_1 == (uint8_t)STATUS::Fault_Detected) || (status_2 == (uint8_t)STATUS::Fault_Detected))
 					{
@@ -232,9 +242,11 @@ void DWM1004C::RunImpl()
 					{
 						check_data = false;
 
-						// PX4_INFO_RAW("checksum: %X|%X, checksum_RX: %X|%X\n", checksum_1, checksum_2, checksum_RX_1, checksum_RX_2); // LOCODECK_NR_OF_TWR_ANCHORS,
+						#ifdef DEBUG_MODE_ON
+						PX4_INFO_RAW("checksum: %X|%X, checksum_RX: %X|%X\n", checksum_1, checksum_2, checksum_RX_1, checksum_RX_2);
+						#endif
 
-						Matrix<float, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition(anchorPosition_data);
+						Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition(anchorPosition_data);
 
 						anchors_used_sum = anchors_used.dot(anchors_used);
 
@@ -242,17 +254,19 @@ void DWM1004C::RunImpl()
 						{
 							measurements_good++;
 
-							// PX4_INFO_RAW("anchors_used_sum = %d\n", anchors_used_sum);
+							#ifdef DEBUG_MODE_ON
+							PX4_INFO_RAW("anchors_used_sum = %d\n", anchors_used_sum);
+							#endif
 
 							double delta_i = 10.0;
 							uint8_t i = 0;
-							Vector3f x_ccf_i_plus_1(x_N);
+							Vector3d x_ccf_i_plus_1(x_N);
 
 							while (delta_i > 0.001 && i < 100)
 							{
-								Vector3f x_ccf_i(x_ccf_i_plus_1);
+								Vector3d x_ccf_i(x_ccf_i_plus_1);
 								x_ccf_i_plus_1 = dme_least_squares(x_ccf_i, anchorPosition.transpose(), measurement_1, anchors_used);
-								delta_i = Vector3f (x_ccf_i_plus_1 - x_ccf_i).norm();
+								delta_i = Vector3d (x_ccf_i_plus_1 - x_ccf_i).norm();
 								i++;
 							}
 
@@ -270,6 +284,15 @@ void DWM1004C::RunImpl()
 								vel_N = (x_ccf_i_plus_1 - x_N) / ((double)SENSOR_INTERVAL_US * 1e-6);
 								x_N = x_ccf_i_plus_1;
 								dwm_errors = 0;
+
+								hrt_abstime _time_velocity_loop = hrt_elapsed_time(&_timestamp_velocity);
+								_timestamp_velocity = hrt_absolute_time();
+
+								#ifdef DEBUG_MODE_ON
+								PX4_INFO_RAW("vel_N = %f, %f, %f\n", (double)vel_N(0), (double)vel_N(1), (double)vel_N(2));
+								PX4_INFO_RAW("Time Velocity Loop: %ld us\n", SENSOR_INTERVAL_US);
+								PX4_INFO_RAW("Time Velocity Loop: %lld us\n", _time_velocity_loop);
+								#endif
 							}
 						}
 						else
@@ -279,13 +302,16 @@ void DWM1004C::RunImpl()
 							dwm_errors++;
 
 							PX4_INFO_RAW("Error: Not enough anchors used\n");
-							// PX4_INFO_RAW("dwm_errors = %d\n", dwm_errors);
+
+							#ifdef DEBUG_MODE_ON
+							PX4_INFO_RAW("dwm_errors = %d\n", dwm_errors);
+							#endif
 						}
 					}
 					else
 					{
 						PX4_DEBUG("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X", status_1, status_2,
-							anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2); // LOCODECK_NR_OF_TWR_ANCHORS,
+							anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2);
 							//(double)measurement_1(LOCODECK_NR_OF_TWR_ANCHORS), (double)measurement_2(LOCODECK_NR_OF_TWR_ANCHORS));
 
 						perf_count(_comms_errors);
@@ -306,17 +332,17 @@ void DWM1004C::RunImpl()
 				double longitude = 0.0;
 				double altitude = 0.0;
 
-				double x_fe = (double)x_N(0);
-				double y_fe = (double)-x_N(1);
-				double z_fe = (double)-x_N(2);
+				double x_fe = x_N(0);
+				double y_fe = -x_N(1);
+				double z_fe = -x_N(2);
 
 				double Psi = 0.0;
 				flat_earth_to_lla(lla_0(0), lla_0(1), lla_0(2), x_fe, y_fe, z_fe, Psi, latitude, longitude, altitude);
 
 				Vector3f gps_vel = Vector3f(0.0, 0.0, 0.0);
-				gps_vel(0) =  vel_N(0);
-				gps_vel(1) = -vel_N(1);
-				gps_vel(2) = -vel_N(2);
+				gps_vel(0) = (float)vel_N(0);
+				gps_vel(1) = (float)-vel_N(1);
+				gps_vel(2) = (float)-vel_N(2);
 
 				// device id
 				device::Device::DeviceId device_id;
@@ -386,20 +412,22 @@ void DWM1004C::RunImpl()
 				*/
 				sensor_gps.timestamp = hrt_absolute_time();
 
-				if (hrt_elapsed_time(&_timestamp_sample) < 20_ms)
-				{
+				//if (hrt_elapsed_time(&_timestamp_sample) < 20_ms)
+				//{
 					_sensor_gps_pub.publish(sensor_gps);
-					// PX4_INFO_RAW("elsapsed time = %lld\n", hrt_elapsed_time(&_timestamp_sample));
-				}
+					// PX4_INFO_RAW("elsapsed time = %lld\n", hrt_elapsed_time(&_timestamp_sample));	// TODO: Zeitmessung
+					perf_count(_loop_interval_perf);
+				//}
 
-				// PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
+				#ifdef DEBUG_MODE_ON
+				PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
+				#endif
 
 				_state = STATE::MEASURE;
 				// ScheduleDelayed(10_ms);
 
 				// listener(ORB_ID(sensor_gps), 1 , -1, 0);
-				ScheduleDelayed(196_ms); // 5 Hz mit anderen delays 2 x 2ms
-				// ScheduleDelayed(590_ms);
+				ScheduleDelayed(183_ms); // 5 Hz
 
 				break;
 			}
@@ -412,7 +440,7 @@ void DWM1004C::RunImpl()
 	// // Filterung
 	// // positionsausreisser filtern, wenn die position zu weit von der letzten position entfernt ist, mit gleitendem mittelwert oder tiefpass filtern
 	// // geschwindigkeitsausreisser filtern, wenn die geschwindigkeit zu weit von der letzten geschwindigkeit entfernt ist, mit gleitendem mittelwert oder tiefpass filtern
-
+	// // ScheduleOnInterval(5000_us); // 2000 us interval, 200 Hz rate
 
 	// double latitude = 0.0;
 	// double longitude = 0.0;
@@ -509,16 +537,16 @@ void DWM1004C::RunImpl()
 	perf_end(_loop_perf);
 }
 
-Vector3f DWM1004C::dme_least_squares(const Vector3f &x_ccf_i, const Matrix<float, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<float, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed)
+Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed)
 {
-	Vector<float, LOCODECK_NR_OF_TWR_ANCHORS> rho_ccf;
-    Matrix<float, LOCODECK_NR_OF_TWR_ANCHORS, 3> H;
+	Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> rho_ccf;
+    Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> H;
 
     for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
     {
         if (anchorUsed(i) == 1)
         {
-            rho_ccf(i) = Vector3f (x_ccf_i - anchorPosition.col(i)).norm();
+            rho_ccf(i) = Vector3d (x_ccf_i - anchorPosition.col(i)).norm();
 
             H(i, 0) = (x_ccf_i(0) - anchorPosition(0, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
             H(i, 1) = (x_ccf_i(1) - anchorPosition(1, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
@@ -535,20 +563,20 @@ Vector3f DWM1004C::dme_least_squares(const Vector3f &x_ccf_i, const Matrix<float
 
     }
 
-    Vector<float, LOCODECK_NR_OF_TWR_ANCHORS> Delta_rho_ccf = z - rho_ccf;
+    Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> Delta_rho_ccf = z - rho_ccf;
 
-    SquareMatrix<float, 3> inv_H_T_H;
+    SquareMatrix<double, 3> inv_H_T_H;
     check_inverse = false;
-    check_inverse = inv(SquareMatrix<float, 3> (H.transpose() * H), inv_H_T_H);
+    check_inverse = inv(SquareMatrix<double, 3> (H.transpose() * H), inv_H_T_H);
 
     if (check_inverse == false)
     {
         return x_ccf_i;
     }
 
-    Vector3f Delta_x_ccf = (inv_H_T_H * H.transpose()) * Delta_rho_ccf;
+    Vector3d Delta_x_ccf = (inv_H_T_H * H.transpose()) * Delta_rho_ccf;
 
-    Vector3f x_ccf_i_plus_1(x_ccf_i + Delta_x_ccf);
+    Vector3d x_ccf_i_plus_1(x_ccf_i + Delta_x_ccf);
 
     return x_ccf_i_plus_1;
 }
@@ -624,6 +652,13 @@ int DWM1004C::probe()
 
 		uint8_t data_2[3] {};
 		int ret2 = transfer(nullptr, 0, &data_2[0], sizeof(data_2));
+
+		#ifdef DEBUG_MODE_ON
+		PX4_INFO_RAW("ret1 = %d, ret2 = %d\n", ret1, ret2);
+		PX4_INFO_RAW("data_1[0] = %X, data_2[0] = %X\n", data_1[0], data_2[0]);
+		PX4_INFO_RAW("data_1[1] = %X, data_2[1] = %X\n", data_1[1], data_2[1]);
+		PX4_INFO_RAW("data_1[2] = %X, data_2[2] = %X\n", data_1[2], data_2[2]);
+		#endif
 
 		if (ret1 == PX4_OK && ret2 == PX4_OK)
 		{
