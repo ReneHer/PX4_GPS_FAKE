@@ -46,6 +46,11 @@ void DWM1004C::print_usage()
 	PRINT_MODULE_USAGE_PARAMS_I2C_ADDRESS(0x28);
 	PRINT_MODULE_USAGE_DEFAULT_COMMANDS();
 
+	PRINT_MODULE_USAGE_COMMAND_DESCR("show_deviation", "Prints the sum of all the deviations to the target distances.");
+	PRINT_MODULE_USAGE_COMMAND_DESCR("offset_up", "Increases the LOCODECK_ANTENNA_OFFSET by 0.01, if target distances failure > 0.0.");
+	PRINT_MODULE_USAGE_COMMAND_DESCR("offset_down", "Decreases the LOCODECK_ANTENNA_OFFSET by 0.01, if target distances failure < 0.0.");
+	PRINT_MODULE_USAGE_COMMAND_DESCR("dwm1004c_reset", "Resets the DWM1004C module.");
+
 	PX4_INFO_RAW("\n");
 }
 
@@ -81,6 +86,22 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 	else if (!strcmp(verb, "status"))
 	{
 		return ThisDriver::module_status(iterator);
+	}
+	else if (!strcmp(verb, "show_deviation")) {
+		cli.custom1 = 1;
+		return ThisDriver::module_custom_method(cli, iterator);
+	}
+	else if (!strcmp(verb, "offset_up")) {
+		cli.custom1 = 2;
+		return ThisDriver::module_custom_method(cli, iterator);
+	}
+	else if (!strcmp(verb, "offset_down")) {
+		cli.custom1 = 3;
+		return ThisDriver::module_custom_method(cli, iterator);
+	}
+	else if (!strcmp(verb, "dwm1004c_reset")) {
+		cli.custom1 = 4;
+		return ThisDriver::module_custom_method(cli, iterator);
 	}
 
 	ThisDriver::print_usage();

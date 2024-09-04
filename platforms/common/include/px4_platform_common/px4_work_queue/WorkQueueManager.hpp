@@ -60,7 +60,7 @@ static constexpr wq_config_t SPI6{"wq:SPI6", 2392, -7};
 
 static constexpr wq_config_t I2C0{"wq:I2C0", 2336, -8};
 static constexpr wq_config_t I2C1{"wq:I2C1", 2336, -9};
-static constexpr wq_config_t I2C2{"wq:I2C2", 2336, -10};
+static constexpr wq_config_t I2C2{"wq:I2C2", 2640, -10};	// René Hertwig: 38*8 bytes more stack than I2C0
 static constexpr wq_config_t I2C3{"wq:I2C3", 2336, -11};
 static constexpr wq_config_t I2C4{"wq:I2C4", 2336, -12};
 

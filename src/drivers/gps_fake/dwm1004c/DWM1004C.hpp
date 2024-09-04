@@ -51,14 +51,22 @@
 
 #define DEBUG_MODE_ON
 
-#define LOCODECK_NR_OF_TWR_ANCHORS	2 // 7 // 8
+#define SENSOR_INTERVAL_HZ			5
+#define GPS_HOR_SPEED_DRIFT_DELAY 	2*SENSOR_INTERVAL_HZ
 
-#define DWM1004C_PROBE 			0x00
-#define DWM1004C_TRANSMIT 		0x99
-#define DWM1004C_RESET 			0xFF
-#define DWM1004C_DATA_LENGTH	1 + 1 + LOCODECK_NR_OF_TWR_ANCHORS * sizeof(double) + 2
+#define LOCODECK_NR_OF_TWR_ANCHORS	8
 
-#define MAX_ERRORS 10
+#define DWM1004C_PROBE 				0x00
+#define DWM1004C_TRANSMIT 			0x99
+#define DWM1004C_OFFSET_UP 			0xA3
+#define DWM1004C_OFFSET_DOWN		0x8F
+#define DWM1004C_RESET 				0xFF
+#define DWM1004C_DATA_LENGTH		1 + 1 + LOCODECK_NR_OF_TWR_ANCHORS * sizeof(double) + 2
+
+#define RMA_WINDOW_SIZE				3
+#define EMA_ALPHA					0.3  // Beispiel-Ganzes Alpha-Wert (Glättungsfaktor) / 0.7 ist schon zu viel, es wird instabil
+
+#define MAX_ERRORS					10
 
 
 using namespace time_literals;
@@ -86,11 +94,15 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 
 		void print_status() override;
 
+		void custom_method(const BusCLIArguments &cli) override;
+
 	private:
 
 		int probe() override;
 
 		Vector3d dme_least_squares(const Vector3d &x_ccf_i, const Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed);
+
+		Vector3d rolling_moving_average(Vector3d x);
 
 		void flat_earth_to_lla(double lat_ref, double lon_ref, double alt_ref, double x_fe, double y_fe, double z_fe, double Psi, double &lat, double &lon, double &alt);
 
@@ -123,10 +135,10 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		perf_counter_t	_loop_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
 		perf_counter_t	_loop_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": interval")};
 
-		static constexpr uint32_t SENSOR_INTERVAL_US{1000000 / 5}; // 5 Hz
+		static constexpr uint32_t SENSOR_INTERVAL_US{1000000 / SENSOR_INTERVAL_HZ}; // 5 Hz
 
 		/*static constexpr*/ const double anchorPosition_data[LOCODECK_NR_OF_TWR_ANCHORS][3] =
-			{
+		{
 			{3.1900, 0.0000, 2.0500},
 			{3.1900, 0.0000, 0.1200},
 			{2.7300, 6.6550, 1.7850},
@@ -145,18 +157,46 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			// {4.470000, 1.510000, 0.160000},
 		};
 
+		#ifdef DEBUG_MODE_ON
+		const double target_distance_IFSYS_Center_data[LOCODECK_NR_OF_TWR_ANCHORS] =
+		{
+			{4.53292400112775},
+			{4.37916658737710},
+			{2.79663190284313},
+			{2.65157500365349},
+			{3.16758977773322},
+			{2.82380948365856},
+			{3.71138114453366},
+			{3.51865741441249},
+		};
+		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> target_distance_IFSYS_Center;
+		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> sum_actual_distances_IFSYS_Center;
+		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> deviation_distances_IFSYS_Center;
+		Vector<uint16_t, LOCODECK_NR_OF_TWR_ANCHORS> counter_measurements_IFSYS_Center;
+		double sum_deviation_distances_IFSYS_Center = 0.0;
+		#endif
+
 		/*static constexpr*/ const double x_0_data[3] = {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
 		/*static constexpr*/ const double vel_N_data[3] = {0.0, 0.0, 0.0};
 
 		/*static constexpr*/ const double lla_0_data[3] = {47.397742, 8.545594, 488.003000};
 
+		// Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition;
 		Vector3d x_N;
 		Vector3d vel_N;
 		Vector3d lla_0;
 
+		SquareMatrix<double, RMA_WINDOW_SIZE> window_rma;
+		Vector3d sum_rma;
+		Vector3d x_N_rma_minus_1;
+
+		Vector3d x_N_ema_minus_1;
+
+		double max_distance = 0.0;
 		int8_t anchors_used_sum = 0;
 		bool check_data = false;
 		bool check_inverse = false;
 		int measurements_good = 0;
 		uint8_t dwm_errors = 0;
+		uint16_t Schedule_Counter = 0;
 };
