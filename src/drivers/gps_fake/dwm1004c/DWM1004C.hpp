@@ -64,7 +64,7 @@
 #define DWM1004C_DATA_LENGTH		1 + 1 + LOCODECK_NR_OF_TWR_ANCHORS * sizeof(double) + 2
 
 #define RMA_WINDOW_SIZE				3
-#define EMA_ALPHA					0.3  // Beispiel-Ganzes Alpha-Wert (Glättungsfaktor) / 0.7 ist schon zu viel, es wird instabil
+#define EMA_ALPHA					0.3  // Glättungsfaktor. 0.7 ist schon zu viel, es wird instabil
 
 #define MAX_ERRORS					10
 
@@ -157,8 +157,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			// {4.470000, 1.510000, 0.160000},
 		};
 
-		#ifdef DEBUG_MODE_ON
-		const double target_distance_IFSYS_Center_data[LOCODECK_NR_OF_TWR_ANCHORS] =
+		const double target_distance_fix_point_data[LOCODECK_NR_OF_TWR_ANCHORS] =	// IFSYS_Center
 		{
 			{4.53292400112775},
 			{4.37916658737710},
@@ -169,12 +168,11 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			{3.71138114453366},
 			{3.51865741441249},
 		};
-		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> target_distance_IFSYS_Center;
-		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> sum_actual_distances_IFSYS_Center;
-		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> deviation_distances_IFSYS_Center;
-		Vector<uint16_t, LOCODECK_NR_OF_TWR_ANCHORS> counter_measurements_IFSYS_Center;
-		double sum_deviation_distances_IFSYS_Center = 0.0;
-		#endif
+		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> target_distance_fix_point;
+		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> sum_actual_distances_fix_point;
+		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> deviation_distances_fix_point;
+		Vector<uint16_t, LOCODECK_NR_OF_TWR_ANCHORS> counter_measurements_fix_point;
+		double sum_deviation_distances_fix_point = 0.0;
 
 		/*static constexpr*/ const double x_0_data[3] = {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
 		/*static constexpr*/ const double vel_N_data[3] = {0.0, 0.0, 0.0};
@@ -199,4 +197,22 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		int measurements_good = 0;
 		uint8_t dwm_errors = 0;
 		uint16_t Schedule_Counter = 0;
+
+		struct custom_method_data_t
+		{
+			uint16_t	received_data_print;
+			uint16_t	received_data_counter;
+			uint16_t	deviations_print;
+			uint16_t 	deviations_counter;
+			uint16_t 	sum_deviations_print;
+			uint16_t 	sum_deviations_counter;
+			uint16_t 	local_coordinates_print;
+			uint16_t 	local_coordinates_counter;
+			uint16_t 	local_velocities_print;
+			uint16_t 	local_velocities_counter;
+			uint16_t 	found_errors_print;
+			uint16_t 	found_errors_counter;
+			float		ema_alpha;							// 0.3 Glättungsfaktor. 0.7 ist schon zu viel, es wird instabil
+			bool		vel_ned_valid;
+		} custom_method_data = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.3, true};
 };
