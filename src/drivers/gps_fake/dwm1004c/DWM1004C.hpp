@@ -212,7 +212,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			uint16_t 	local_velocities_counter;
 			uint16_t 	found_errors_print;
 			uint16_t 	found_errors_counter;
-			float		ema_alpha;							// 0.3 Glättungsfaktor. 0.7 ist schon zu viel, es wird instabil
+			double		ema_alpha;							// 0.3 Glättungsfaktor. 0.7 ist schon zu viel, es wird instabil
 			bool		vel_ned_valid;
 		} custom_method_data = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.3, true};
 };

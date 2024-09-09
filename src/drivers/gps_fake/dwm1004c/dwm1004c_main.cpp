@@ -194,14 +194,14 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 	else if (!strcmp(verb, "ema_alpha"))
 	{
 		cli.custom1 = 30;
-		float alpha = 0.3;
+		double alpha = 0.3;
 		cli.custom_data = &alpha;
 		if (argc >= 3)
 		{
 			alpha = atof(argv[2]);
 		}
 		// double x = *((float *)cli.custom_data);
-		PX4_INFO_RAW("Will set 'ema_alpha = %f'.\n", (double)(*((float *)cli.custom_data))); // TODO: check if this works?
+		PX4_INFO_RAW("Will set 'ema_alpha = %f'.\n", *((double *)cli.custom_data)); // TODO: check if this works?
 		return ThisDriver::module_custom_method(cli, iterator);
 	}
 	else if (!strcmp(verb, "vel_ned_valid"))

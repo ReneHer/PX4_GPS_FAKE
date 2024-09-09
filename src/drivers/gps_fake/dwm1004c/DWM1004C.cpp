@@ -155,7 +155,7 @@ void DWM1004C::RunImpl()
 
 				if (dwm_errors == MAX_ERRORS)
 				{
-					PX4_WARN("DWM1004C_RESET\n");
+					PX4_WARN("DWM1004C_RESET");
 
 					cmd = DWM1004C_RESET;
 					transfer(&cmd, 1, nullptr, 0);
@@ -255,12 +255,12 @@ void DWM1004C::RunImpl()
 
 					if (custom_method_data.received_data_counter < custom_method_data.received_data_print)
 					{
-						PX4_INFO("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X\n",
+						PX4_INFO("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X",
 								status_1, status_2, anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2);
 						for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 						{
 							// PX4_INFO("anchors_used[%d] = %d\n", i, anchors_used(i));
-							PX4_INFO("measurement_1[%d] = %f\n", i, (double)measurement_1(i));
+							PX4_INFO("measurement_1[%d] = %f", i, (double)measurement_1(i));
 						}
 						custom_method_data.received_data_counter++;
 					}
@@ -280,9 +280,10 @@ void DWM1004C::RunImpl()
 						{
 							counter_measurements_fix_point(i)++;
 							sum_actual_distances_fix_point(i) = sum_actual_distances_fix_point(i) + measurement_1(i);
-						}
+						// }
 						deviation_distances_fix_point(i) = ( sum_actual_distances_fix_point(i) / counter_measurements_fix_point(i) ) - target_distance_fix_point(i);
 						sum_deviation_distances_fix_point = sum_deviation_distances_fix_point + deviation_distances_fix_point(i);
+						}
 					}
 
 					if (custom_method_data.deviations_counter < custom_method_data.deviations_print)
@@ -292,14 +293,14 @@ void DWM1004C::RunImpl()
 						{
 							// PX4_INFO("anchors_used[%d] = %d\n", i, anchors_used(i));
 							// PX4_INFO("measurement_1[%d] = %f\n", i, (double)measurement_1(i));
-							PX4_INFO("deviation_distances_fix_point[%d] = %f\n", i, (double)deviation_distances_fix_point(i));
+							PX4_INFO("deviation_distances_fix_point[%d] = %f", i, (double)deviation_distances_fix_point(i));
 						}
 						custom_method_data.deviations_counter++;
 					}
 
 					if (custom_method_data.sum_deviations_counter < custom_method_data.sum_deviations_print)
 					{
-						PX4_INFO("sum_deviation_distances_fix_point = %f\n", sum_deviation_distances_fix_point);
+						PX4_INFO("sum_deviation_distances_fix_point = %f", sum_deviation_distances_fix_point);
 						custom_method_data.sum_deviations_counter++;
 					}
 
@@ -309,7 +310,7 @@ void DWM1004C::RunImpl()
 						perf_count(_fault_perf);
 						dwm_errors++;
 
-						PX4_INFO("Fault Detected\n");
+						PX4_INFO("Fault Detected");
 					}
 					else if ((status_1 == (uint8_t)STATUS::Normal_Operation) && (status_2 == (uint8_t)STATUS::Stale_Data)
 						&& (anchors_used_data_1 == anchors_used_data_2) && (checksum_1 == checksum_RX_2)) // && (measurement_end_1 == measurement_end_2)
@@ -368,9 +369,8 @@ void DWM1004C::RunImpl()
 									// vel_N = vel_N_rma;
 
 									// Exponential Moving Average/Low Pass Filter
-									Vector3d x_N_ema = EMA_ALPHA * x_ccf_i_plus_1 + (1 - EMA_ALPHA) * x_N_ema_minus_1;
-									PX4_INFO_RAW("custom_method_data.ema_alpha = %f\n", (double)custom_method_data.ema_alpha);
-									// Vector3d x_N_ema = custom_method_data.ema_alpha * x_ccf_i_plus_1 + (1 - custom_method_data.ema_alpha) * x_N_ema_minus_1;
+									// Vector3d x_N_ema = EMA_ALPHA * x_ccf_i_plus_1 + (1 - EMA_ALPHA) * x_N_ema_minus_1;
+									Vector3d x_N_ema = custom_method_data.ema_alpha * x_ccf_i_plus_1 + (1 - custom_method_data.ema_alpha) * x_N_ema_minus_1;
 									Vector3d vel_N_ema = (x_N_ema - x_N_ema_minus_1) / ((double)_time_velocity_loop * 1e-6);
 									x_N_ema_minus_1 = x_N_ema;
 									if (Schedule_Counter < GPS_HOR_SPEED_DRIFT_DELAY)
@@ -387,13 +387,13 @@ void DWM1004C::RunImpl()
 
 									if (custom_method_data.local_coordinates_counter < custom_method_data.local_coordinates_print)
 									{
-										PX4_INFO("x_N = %f, %f, %f\n", x_N(0), x_N(1), x_N(2));
+										PX4_INFO("x_N = %f, %f, %f", x_N(0), x_N(1), x_N(2));
 										custom_method_data.local_coordinates_counter++;
 									}
 
 									if (custom_method_data.local_velocities_counter < custom_method_data.local_velocities_print)
 									{
-										PX4_INFO("vel_N = %f, %f, %f\n", vel_N(0), vel_N(1), vel_N(2));
+										PX4_INFO("vel_N = %f, %f, %f", vel_N(0), vel_N(1), vel_N(2));
 										custom_method_data.local_velocities_counter++;
 									}
 
@@ -409,7 +409,7 @@ void DWM1004C::RunImpl()
 									perf_count(_fault_perf);
 									dwm_errors++;
 
-									PX4_INFO("Error: Measurement failure\n");
+									PX4_INFO("Error: Measurement failure");
 								}
 							}
 							else
@@ -418,7 +418,7 @@ void DWM1004C::RunImpl()
 								perf_count(_fault_perf);
 								dwm_errors++;
 
-								PX4_INFO("Error: No convergence of DME-Least-Squares-Algorithm\n");
+								PX4_INFO("Error: No convergence of DME-Least-Squares-Algorithm");
 							}
 						}
 						else
@@ -427,7 +427,7 @@ void DWM1004C::RunImpl()
 							perf_count(_fault_perf);
 							dwm_errors++;
 
-							PX4_INFO("Error: Not enough anchors used\n");
+							PX4_INFO("Error: Not enough anchors used");
 						}
 					}
 					else
@@ -438,13 +438,17 @@ void DWM1004C::RunImpl()
 						perf_count(_comms_errors);
 						dwm_errors++;
 
-						PX4_INFO("Error: Status, Anchors, Checksum or Measurement not OK\n");
+						PX4_INFO("Error: Status, Anchors, Checksum or Measurement not OK");
 						// PX4_INFO_RAW("status:%X|%X, anchors_used:%X|%X, checksum:%X|%X, checksum_RX:%X|%X",
 						// 		status_1, status_2, anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2);
 					}
 				}
 
-				// PX4_INFO_RAW("dwm_errors = %d\n", dwm_errors);
+				if (custom_method_data.found_errors_counter < custom_method_data.found_errors_print)
+				{
+					PX4_INFO("dwm_errors = %d", dwm_errors);
+					custom_method_data.found_errors_counter++;
+				}
 
 				_state = STATE::PUBLISH;
 				ScheduleDelayed(2_ms);
@@ -560,17 +564,10 @@ void DWM1004C::RunImpl()
 	// Standardabweichung der Messung, Rauschen, Messunsicherheit
 	// ScheduleOnInterval(5000_us); // 2000 us interval, 200 Hz rate
 	// platforms/common/include/px4_platform_common/px4_work_queue/WorkQueueManager.hpp
-	// -> Zeile 63: "wq:I2C2" -> stacksizes -> 2336 -> 2640 (min. 300 bytes mehr) gegen "WARN  [load_mon] init low on stack!"
-
-	if (custom_method_data.found_errors_counter < custom_method_data.found_errors_print)
-	{
-		PX4_INFO("dwm_errors = %d\n", dwm_errors);
-		custom_method_data.found_errors_counter++;
-	}
+	// -> Zeile 63: "wq:I2C2" -> stacksizes -> 2336 -> 2656 (min. 300 bytes mehr) gegen "WARN  [load_mon] init low on stack!"
 
 	// PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
 
-	// listener(ORB_ID(sensor_gps), 1 , -1, 0);
 	// ScheduleDelayed(182_ms); // 183_ms // 5 Hz					// TODO: checken
 
 	perf_end(_loop_perf);
@@ -610,8 +607,8 @@ Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Matrix<doubl
 
     if (check_inverse == false)
     {
-		// dwm_errors++;
-		// PX4_INFO("Error: No inverse matrix in least squares algorithm\n"); // TODO: Fehlermeldung
+		dwm_errors++;
+		PX4_INFO("Error: No inverse matrix in least squares algorithm"); // TODO: Fehlermeldung
         return x_ccf_i;
     }
 
@@ -737,29 +734,29 @@ void DWM1004C::custom_method(const BusCLIArguments &cli)
 		case 20:
 			custom_method_cmd = DWM1004C_OFFSET_UP;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
-			PX4_INFO_RAW("The LOCODECK_ANTENNA_OFFSET will be increased by 0.01.\n");
+			PX4_INFO("The LOCODECK_ANTENNA_OFFSET will be increased by 0.01.");
 			break;
 		case 21:
 			custom_method_cmd = DWM1004C_OFFSET_DOWN;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
-			PX4_INFO_RAW("The LOCODECK_ANTENNA_OFFSET will be decreased by 0.01.\n");
+			PX4_INFO("The LOCODECK_ANTENNA_OFFSET will be decreased by 0.01.");
 			break;
 		case 30:
-			custom_method_data.ema_alpha = *((float *)cli.custom_data);
-			PX4_INFO_RAW("ema_alpha = %f\n", (double)custom_method_data.ema_alpha);
+			custom_method_data.ema_alpha = *((double *)cli.custom_data);
+			PX4_INFO("ema_alpha = %f", custom_method_data.ema_alpha);
 			break;
 		case 40:
 			custom_method_data.vel_ned_valid = true;
-			PX4_INFO_RAW("vel_ned_valid = %s\n", custom_method_data.vel_ned_valid ? "true" : "false");
+			PX4_INFO("vel_ned_valid = %s", custom_method_data.vel_ned_valid ? "true" : "false");
 			break;
 		case 41:
 			custom_method_data.vel_ned_valid = false;
-			PX4_INFO_RAW("vel_ned_valid = %s\n", custom_method_data.vel_ned_valid ? "true" : "false");
+			PX4_INFO("vel_ned_valid = %s", custom_method_data.vel_ned_valid ? "true" : "false");
 			break;
 		case 50:
 			custom_method_cmd = DWM1004C_RESET;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
-			PX4_INFO_RAW("The DWM1004C will be reseted.'\n");
+			PX4_INFO("The DWM1004C will be reseted.");
 			break;
 	}
 }
