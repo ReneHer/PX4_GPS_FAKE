@@ -608,7 +608,7 @@ Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Matrix<doubl
     if (check_inverse == false)
     {
 		dwm_errors++;
-		PX4_INFO("Error: No inverse matrix in least squares algorithm"); // TODO: Fehlermeldung
+		PX4_INFO("Error: No inverse matrix in least squares algorithm");
         return x_ccf_i;
     }
 
@@ -688,25 +688,8 @@ void DWM1004C::custom_method(const BusCLIArguments &cli)
 {
 	uint8_t custom_method_cmd = DWM1004C_TRANSMIT;
 
-	switch(cli.custom1) {
-		// case 1:
-		// 	PX4_INFO_RAW("sum_deviation_distance_fix_point = %f\n", sum_deviation_distances_fix_point);
-		// 	break;
-		// case 2:
-		// 	PX4_INFO_RAW("offset_up\n");
-		// 	custom_method_cmd = DWM1004C_OFFSET_UP;
-		// 	transfer(&custom_method_cmd, 1, nullptr, 0);
-		// 	break;
-		// case 3:
-		// 	PX4_INFO_RAW("offset_down\n");
-		// 	custom_method_cmd = DWM1004C_OFFSET_DOWN;
-		// 	transfer(&custom_method_cmd, 1, nullptr, 0);
-		// 	break;
-		// case 4:
-		// 	PX4_INFO_RAW("dwm1004c_reset\n");
-		// 	custom_method_cmd = DWM1004C_RESET;
-		// 	transfer(&custom_method_cmd, 1, nullptr, 0);
-		// 	break;
+	switch(cli.custom1)
+	{
 		case 10:
 			custom_method_data.received_data_print = cli.custom2;
 			custom_method_data.received_data_counter = 0;
@@ -734,11 +717,15 @@ void DWM1004C::custom_method(const BusCLIArguments &cli)
 		case 20:
 			custom_method_cmd = DWM1004C_OFFSET_UP;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
+			counter_measurements_fix_point.setZero();
+			sum_actual_distances_fix_point.setZero();
 			PX4_INFO("The LOCODECK_ANTENNA_OFFSET will be increased by 0.01.");
 			break;
 		case 21:
 			custom_method_cmd = DWM1004C_OFFSET_DOWN;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
+			counter_measurements_fix_point.setZero();
+			sum_actual_distances_fix_point.setZero();
 			PX4_INFO("The LOCODECK_ANTENNA_OFFSET will be decreased by 0.01.");
 			break;
 		case 30:

@@ -174,7 +174,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		Vector<uint16_t, LOCODECK_NR_OF_TWR_ANCHORS> counter_measurements_fix_point;
 		double sum_deviation_distances_fix_point = 0.0;
 
-		/*static constexpr*/ const double x_0_data[3] = {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
+		/*static constexpr*/ const double x_0_data[3] = {2.000, 4.170, 0.735}; // {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
 		/*static constexpr*/ const double vel_N_data[3] = {0.0, 0.0, 0.0};
 
 		/*static constexpr*/ const double lla_0_data[3] = {47.397742, 8.545594, 488.003000};
