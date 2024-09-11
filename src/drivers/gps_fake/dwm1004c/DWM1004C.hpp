@@ -157,16 +157,26 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			// {4.470000, 1.510000, 0.160000},
 		};
 
-		const double target_distance_fix_point_data[LOCODECK_NR_OF_TWR_ANCHORS] =	// IFSYS_Center
+		const double target_distance_fix_point_data[LOCODECK_NR_OF_TWR_ANCHORS] =
 		{
-			{4.53292400112775},
-			{4.37916658737710},
-			{2.79663190284313},
-			{2.65157500365349},
-			{3.16758977773322},
-			{2.82380948365856},
-			{3.71138114453366},
-			{3.51865741441249},
+			// IFSYS_Center Tisch {2.000, 4.170, 0.735};
+			// {4.53292400112775},
+			// {4.37916658737710},
+			// {2.79663190284313},
+			// {2.65157500365349},
+			// {3.16758977773322},
+			// {2.82380948365856},
+			// {3.71138114453366},
+			// {3.51865741441249},
+			// IFSYS_Center Rollwagen {2.000, 3.000, 0.780};
+			{3.468284878726083},
+			{3.294191858407765},
+			{3.860304392143190},
+			{3.777916092239213},
+			{4.130003026633274},
+			{3.854153603581466},
+			{2.702582098660464},
+			{2.469625477678751},
 		};
 		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> target_distance_fix_point;
 		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> sum_actual_distances_fix_point;
@@ -174,7 +184,7 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 		Vector<uint16_t, LOCODECK_NR_OF_TWR_ANCHORS> counter_measurements_fix_point;
 		double sum_deviation_distances_fix_point = 0.0;
 
-		/*static constexpr*/ const double x_0_data[3] = {2.000, 4.170, 0.735}; // {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
+		/*static constexpr*/ const double x_0_data[3] = {2.000, 3.000, 0.780}; // {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
 		/*static constexpr*/ const double vel_N_data[3] = {0.0, 0.0, 0.0};
 
 		/*static constexpr*/ const double lla_0_data[3] = {47.397742, 8.545594, 488.003000};
@@ -212,7 +222,8 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			uint16_t 	local_velocities_counter;
 			uint16_t 	found_errors_print;
 			uint16_t 	found_errors_counter;
+			uint8_t		anchors_used[LOCODECK_NR_OF_TWR_ANCHORS];
 			double		ema_alpha;							// 0.3 Glättungsfaktor. 0.7 ist schon zu viel, es wird instabil
 			bool		vel_ned_valid;
-		} custom_method_data = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.3, true};
+		} custom_method_data = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, {1, 1, 1, 1, 1, 1, 1, 1}, 0.3, true};
 };

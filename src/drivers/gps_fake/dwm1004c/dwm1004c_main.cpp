@@ -53,6 +53,9 @@ void DWM1004C::print_usage()
 	PRINT_MODULE_USAGE_ARG("local_coordinates <val>", "calculated local coordinates", true);
 	PRINT_MODULE_USAGE_ARG("local_velocities <val>", " calculated local velocities", true);
 	PRINT_MODULE_USAGE_ARG("found_errors <val>", "     number of found errors", true);
+	PRINT_MODULE_USAGE_COMMAND_DESCR("anchor", "usage of anchor <val> (default=on) in the calculations");
+	PRINT_MODULE_USAGE_ARG("<val> on", "set 'anchors_used[<val>] = 1'", true);
+	PRINT_MODULE_USAGE_ARG("<val> off", "set 'anchors_used[<val>] = 0'", true);
 	PRINT_MODULE_USAGE_COMMAND_DESCR("ant_offset", "change of the LOCODECK_ANTENNA_OFFSET");
 	PRINT_MODULE_USAGE_ARG("up", "increase the offset by 0.01, if the sum of deviations of meassured to target distances of fix point > 0.0", true);
 	PRINT_MODULE_USAGE_ARG("down", "decrease the offset by 0.01, if the sum of deviations of meassured to target distances of fix point < 0.0", true);
@@ -173,19 +176,38 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 			}
 		}
 	}
+	else if (!strcmp(verb, "anchor"))
+	{
+		if (argc >= 4)
+		{
+			cli.custom2 = atoi(argv[2]);
+			if (!strcmp(argv[3], "on"))
+			{
+				cli.custom1 = 20;
+				PX4_INFO_RAW("Will set 'anchors_used[%d] = 1'.\n", cli.custom2);
+				return ThisDriver::module_custom_method(cli, iterator);
+			}
+			else if (!strcmp(argv[3], "off"))
+			{
+				cli.custom1 = 21;
+				PX4_INFO_RAW("Will set 'anchors_used[%d] = 0'.\n", cli.custom2);
+				return ThisDriver::module_custom_method(cli, iterator);
+			}
+		}
+	}
 	else if (!strcmp(verb, "ant_offset"))
 	{
 		if (argc >= 3)
 		{
 			if (!strcmp(argv[2], "up"))
 			{
-				cli.custom1 = 20;
+				cli.custom1 = 30;
 				PX4_INFO_RAW("The LOCODECK_ANTENNA_OFFSET will be increased by 0.01.\n");
 				return ThisDriver::module_custom_method(cli, iterator);
 			}
 			else if (!strcmp(argv[2], "down"))
 			{
-				cli.custom1 = 21;
+				cli.custom1 = 31;
 				PX4_INFO_RAW("The LOCODECK_ANTENNA_OFFSET will be decreased by 0.01.\n");
 				return ThisDriver::module_custom_method(cli, iterator);
 			}
@@ -193,7 +215,7 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 	}
 	else if (!strcmp(verb, "ema_alpha"))
 	{
-		cli.custom1 = 30;
+		cli.custom1 = 40;
 		double alpha = 0.3;
 		cli.custom_data = &alpha;
 		if (argc >= 3)
@@ -210,13 +232,13 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 		{
 			if (!strcmp(argv[2], "true"))
 			{
-				cli.custom1 = 40;
+				cli.custom1 = 50;
 				PX4_INFO_RAW("Will set 'sensor_gps.vel_ned_valid = true'.\n");
 				return ThisDriver::module_custom_method(cli, iterator);
 			}
 			else if (!strcmp(argv[2], "false"))
 			{
-				cli.custom1 = 41;
+				cli.custom1 = 51;
 				PX4_INFO_RAW("Will set 'sensor_gps.vel_ned_valid = false'.\n");
 				return ThisDriver::module_custom_method(cli, iterator);
 			}
@@ -224,7 +246,7 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 	}
 	else if (!strcmp(verb, "dwm_reset"))
 	{
-		cli.custom1 = 50;
+		cli.custom1 = 90;
 		PX4_INFO_RAW("The DWM1004C will be reseted.\n");
 		return ThisDriver::module_custom_method(cli, iterator);
 	}

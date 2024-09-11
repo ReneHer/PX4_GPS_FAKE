@@ -269,7 +269,7 @@ void DWM1004C::RunImpl()
 
 					for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 					{
-						if (measurement_1(i) < 0.0 || measurement_1(i) > max_distance)
+						if ((measurement_1(i) < 0.0) || (measurement_1(i) > max_distance) || (custom_method_data.anchors_used[i] == 0))
 						{
 							anchors_used(i) = 0;
 							measurement_1(i) = 0.0;
@@ -281,8 +281,8 @@ void DWM1004C::RunImpl()
 							counter_measurements_fix_point(i)++;
 							sum_actual_distances_fix_point(i) = sum_actual_distances_fix_point(i) + measurement_1(i);
 						// }
-						deviation_distances_fix_point(i) = ( sum_actual_distances_fix_point(i) / counter_measurements_fix_point(i) ) - target_distance_fix_point(i);
-						sum_deviation_distances_fix_point = sum_deviation_distances_fix_point + deviation_distances_fix_point(i);
+							deviation_distances_fix_point(i) = ( sum_actual_distances_fix_point(i) / counter_measurements_fix_point(i) ) - target_distance_fix_point(i);
+							sum_deviation_distances_fix_point = sum_deviation_distances_fix_point + deviation_distances_fix_point(i);
 						}
 					}
 
@@ -715,32 +715,47 @@ void DWM1004C::custom_method(const BusCLIArguments &cli)
 			custom_method_data.found_errors_counter = 0;
 			break;
 		case 20:
+			custom_method_data.anchors_used[cli.custom2] = 1;
+			for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
+			{
+				PX4_INFO("anchor_used[%d] = %d", i, custom_method_data.anchors_used[i]);
+			}
+			break;
+		case 21:
+			custom_method_data.anchors_used[cli.custom2] = 0;
+			for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
+			{
+				PX4_INFO("anchor_used[%d] = %d", i, custom_method_data.anchors_used[i]);
+			}
+			deviation_distances_fix_point(cli.custom2) = 0.0;
+			break;
+		case 30:
 			custom_method_cmd = DWM1004C_OFFSET_UP;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
 			counter_measurements_fix_point.setZero();
 			sum_actual_distances_fix_point.setZero();
 			PX4_INFO("The LOCODECK_ANTENNA_OFFSET will be increased by 0.01.");
 			break;
-		case 21:
+		case 31:
 			custom_method_cmd = DWM1004C_OFFSET_DOWN;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
 			counter_measurements_fix_point.setZero();
 			sum_actual_distances_fix_point.setZero();
 			PX4_INFO("The LOCODECK_ANTENNA_OFFSET will be decreased by 0.01.");
 			break;
-		case 30:
+		case 40:
 			custom_method_data.ema_alpha = *((double *)cli.custom_data);
 			PX4_INFO("ema_alpha = %f", custom_method_data.ema_alpha);
 			break;
-		case 40:
+		case 50:
 			custom_method_data.vel_ned_valid = true;
 			PX4_INFO("vel_ned_valid = %s", custom_method_data.vel_ned_valid ? "true" : "false");
 			break;
-		case 41:
+		case 51:
 			custom_method_data.vel_ned_valid = false;
 			PX4_INFO("vel_ned_valid = %s", custom_method_data.vel_ned_valid ? "true" : "false");
 			break;
-		case 50:
+		case 90:
 			custom_method_cmd = DWM1004C_RESET;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
 			PX4_INFO("The DWM1004C will be reseted.");
