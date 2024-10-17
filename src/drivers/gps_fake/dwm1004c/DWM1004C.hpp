@@ -49,8 +49,6 @@
 // #include <systemcmds/topic_listener/topic_listener.hpp>
 
 
-#define DEBUG_MODE_ON
-
 #define SENSOR_INTERVAL_HZ			5
 #define GPS_HOR_SPEED_DRIFT_DELAY 	2*SENSOR_INTERVAL_HZ
 
@@ -100,7 +98,8 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 
 		int probe() override;
 
-		Vector3d dme_least_squares(const Vector3d &x_ccf_i, const Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed);
+		// Vector3d dme_least_squares(const Vector3d &x_ccf_i, const Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed);
+		Vector3d dme_least_squares(const Vector3d &x_ccf_i, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed);
 
 		Vector3d rolling_moving_average(Vector3d x);
 
@@ -137,16 +136,44 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 
 		static constexpr uint32_t SENSOR_INTERVAL_US{1000000 / SENSOR_INTERVAL_HZ}; // 5 Hz
 
+		uint8_t anchors_used_sum = 0;
+		uint8_t dwm_errors = 0;
+
+		double max_distance = 0.0;
+
 		/*static constexpr*/ const double anchorPosition_data[LOCODECK_NR_OF_TWR_ANCHORS][3] =
 		{
-			{3.1900, 0.0000, 2.0500},
-			{3.1900, 0.0000, 0.1200},
-			{2.7300, 6.6550, 1.7850},
-			{2.7400, 6.6550, 0.1750},
-			{0.3000, 6.6300, 1.7750},
-			{0.5100, 6.5000, 0.1600},
-			{0.9100, 0.8750, 2.0450},
-			{0.9050, 0.8750, 0.1600},
+			// Cage
+			// Standard [x, y, z]-Koodinaten
+			{0.0000, 6.1030, 2.2300},
+			{0.2600, 0.1030, 0.1600},
+			{0.1300, 0.0000, 2.2580},
+			{6.7400, 0.1030, 0.1600},
+			{6.8600, 6.1880, 2.4800},
+			{6.7400, 6.1030, 0.1600},
+			{7.0000, 0.0050, 2.2400},
+			{0.2600, 6.1030, 0.1600},
+			// IFSYS Raum
+			// Standard [x, y, z]-Koodinaten
+			// {3.1900, 0.0050, 2.0500},
+			// {3.1900, 0.0150, 0.1100},
+			// {2.7300, 6.6500, 1.7800},
+			// {2.7300, 6.6500, 0.1700},
+			// {0.3000, 6.6200, 1.7700},
+			// {0.5100, 6.5000, 0.1600},
+			// {0.9100, 0.8900, 2.0300},
+			// {0.9000, 0.8800, 0.1600},
+			// [N, E, D]-Koodinaten
+			// {3.1930, 7.1490, 0.4160},
+			// {3.1900, 7.1550, 2.3500},
+			// {2.7260, 0.5190, 0.6810},
+			// {2.7290, 0.5110, 2.2920},
+			// {0.3000, 0.5440, 0.6950},
+			// {0.5120, 0.6670, 2.3070},
+			// {0.9120, 6.2900, 0.4370},
+			// {0.9030, 6.2900, 2.3030},
+			// Keller Flugführer
+			// Standard [x, y, z]-Koodinaten
 			// {0.330000, 1.490000, 0.160000},
 			// {0.370000, 6.500000, 2.250000},
 			// {4.470000, 6.490000, 0.160000},
@@ -156,6 +183,8 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			// {4.470000, 6.510000, 2.250000},
 			// {4.470000, 1.510000, 0.160000},
 		};
+		Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition;   // TODO: global?
+		Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> anchorPosition_transposed;   // TODO: global?
 
 		const double target_distance_fix_point_data[LOCODECK_NR_OF_TWR_ANCHORS] =
 		{
@@ -168,31 +197,83 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			// {2.82380948365856},
 			// {3.71138114453366},
 			// {3.51865741441249},
-			// IFSYS_Center Rollwagen {2.000, 3.000, 0.780};
-			{3.468284878726083},
-			{3.294191858407765},
-			{3.860304392143190},
-			{3.777916092239213},
-			{4.130003026633274},
-			{3.854153603581466},
-			{2.702582098660464},
-			{2.469625477678751},
+			// IFSYS_Center Rollwagen DWM Position Z1 {2.000, 3.000, 0.730};
+			// {3.486904070948898},
+			// {3.284539541549165},
+			// {3.873622335747253},
+			// {3.770232088346817},
+			// {4.142333279686703},
+			// {3.846426913383381},
+			// {2.726343705404731},
+			// {2.457549592582009},
+			// IFSYS_Center Rollwagen DWM Position Z2 {2.000, 3.000, 0.815};
+			// {3.455622230510737},
+			// {3.301382286255259},
+			// {3.851340675660880},
+			// {3.783678765434508},
+			// {4.121710809845834},
+			// {3.859938471012200},
+			// {2.686377672629074},
+			// {2.478643782393912},
+			// IFSYS_Center Rollwagen DWM Position Z3 {2.000, 3.000, 0.775};
+			// {3.470118874044519},
+			// {3.293193738606947},
+			// {3.861609120561013},
+			// {3.777118610793154},
+			// {4.131210476361620},
+			// {3.853352436515508},
+			// {2.704926061836072},
+			// {2.468374971514660},
+			// IFSYS_Center Stehle DWM Position I1 {2.000, 3.000, 0.950};
+			// {3.409706732257190},
+			// {3.332416540590327},
+			// {3.819574583641482},
+			// {3.808838405603472},
+			// {4.092374005391003},
+			// {3.885125480599050},
+			// {2.627308508721425},
+			// {2.517687430957227},
+			// IFSYS_Center Stehle DWM Position I2 {2.000, 3.000, 0.960};
+			// {3.406493798614640},
+			// {3.334921288426460},
+			// {3.817400948289294},
+			// {3.810885723818021},
+			// {4.090369787684238},
+			// {3.887171207960874},
+			// {2.623156495522141},
+			// {2.520843112928688},
+			// IFSYS_Center Stehle DWM Position I3 {2.000, 3.000, 0.920};
+			// {3.419502887847882},
+			// {3.325071427804221},
+			// {3.826244895455595},
+			// {3.802847617246845},
+			// {4.098527174485976},
+			// {3.879136501851926},
+			// {2.639952651090546},
+			// {2.508435767565118},
+			// IFSYS_Center Rollwagen mit Stehle DWM Position I1 {2.000, 3.000, 1.080};
+			{3.370014836762592},
+			{3.367150130303073},
+			{3.79327694744267},
+			{3.83740146453300},
+			{4.06815990344529},
+			{3.91363002850295},
+			{2.57583966892351},
+			{2.56145466483403},
 		};
 		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> target_distance_fix_point;
 		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> sum_actual_distances_fix_point;
 		Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> deviation_distances_fix_point;
 		Vector<uint16_t, LOCODECK_NR_OF_TWR_ANCHORS> counter_measurements_fix_point;
 		double sum_deviation_distances_fix_point = 0.0;
+		double sum_abs_deviation_distances_fix_point = 0.0;
 
-		/*static constexpr*/ const double x_0_data[3] = {2.000, 3.000, 0.780}; // {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0};
-		/*static constexpr*/ const double vel_N_data[3] = {0.0, 0.0, 0.0};
+		int measurements_good = 0;
 
-		/*static constexpr*/ const double lla_0_data[3] = {47.397742, 8.545594, 488.003000};
-
-		// Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition;
+		/*static constexpr*/ const double x_0_data[3] = {3.500, 3.000, 0.160}; // Cage // {2.000, 3.000, 1.242}; // doppelter Rollwagen // {1.0, 1.0, 1.0}; // {2.45*10, 4.10*10, 1.0}; // == calibration point
 		Vector3d x_N;
+		/*static constexpr*/ const double vel_N_data[3] = {0.0, 0.0, 0.0};
 		Vector3d vel_N;
-		Vector3d lla_0;
 
 		SquareMatrix<double, RMA_WINDOW_SIZE> window_rma;
 		Vector3d sum_rma;
@@ -200,13 +281,14 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 
 		Vector3d x_N_ema_minus_1;
 
-		double max_distance = 0.0;
-		int8_t anchors_used_sum = 0;
+		uint8_t gps_hor_speed_drift_delay = 2*SENSOR_INTERVAL_HZ;
+		uint16_t Schedule_Counter = 0;
+
+		/*static constexpr*/ const double lla_0_data[3] = {52.515391059955704, 13.323944815389625, 60.000000000000000}; // Drone-Cage ILR // {47.397742, 8.545594, 488.003000}; // Zürich
+		Vector3d lla_0;
+
 		bool check_data = false;
 		bool check_inverse = false;
-		int measurements_good = 0;
-		uint8_t dwm_errors = 0;
-		uint16_t Schedule_Counter = 0;
 
 		struct custom_method_data_t
 		{
@@ -225,5 +307,6 @@ class DWM1004C : public device::I2C, public I2CSPIDriver<DWM1004C>
 			uint8_t		anchors_used[LOCODECK_NR_OF_TWR_ANCHORS];
 			double		ema_alpha;							// 0.3 Glättungsfaktor. 0.7 ist schon zu viel, es wird instabil
 			bool		vel_ned_valid;
-		} custom_method_data = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, {1, 1, 1, 1, 1, 1, 1, 1}, 0.3, true};
+			uint32_t 	schedule_delayed;
+		} custom_method_data = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, {1, 1, 1, 1, 1, 1, 1, 1}, 0.3, true, 183_ms};
 };

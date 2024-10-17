@@ -54,21 +54,6 @@ DWM1004C::~DWM1004C()
 }
 
 
-// void DWM1004C::print_usage()
-// {
-// 	PX4_INFO_RAW("\n");
-
-// 	PRINT_MODULE_USAGE_NAME("dwm1004c", "driver");
-// 	// PRINT_MODULE_USAGE_SUBCATEGORY("gps");
-// 	PRINT_MODULE_USAGE_COMMAND("start");
-// 	PRINT_MODULE_USAGE_PARAMS_I2C_SPI_DRIVER(true, false);
-// 	PRINT_MODULE_USAGE_PARAMS_I2C_ADDRESS(I2C_ADDRESS_DEFAULT); // 0x28);
-// 	PRINT_MODULE_USAGE_DEFAULT_COMMANDS();
-
-// 	PX4_INFO_RAW("\n");
-// }
-
-
 int DWM1004C::init()
 {
 	int ret = I2C::init();
@@ -86,26 +71,32 @@ int DWM1004C::init()
 		// ScheduleOnInterval(SENSOR_INTERVAL_US/3);//, SENSOR_INTERVAL_US/3);		// TODO: checken
 	}
 
-	// anchorPosition = Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3>(anchorPosition_data);
-	x_N = Vector3d(x_0_data);
-	vel_N = Vector3d(vel_N_data);
-	lla_0 = Vector3d(lla_0_data);
-
 	anchors_used_sum = 0;
 	dwm_errors = 0;
-	measurements_good = 0;
-	max_distance = 0.0;
 
-	Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition(anchorPosition_data);
+	max_distance = 0.0;
+	// Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition(anchorPosition_data);
+	anchorPosition = Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> (anchorPosition_data);
+	anchorPosition_transposed = anchorPosition.transpose();
 	for (uint8_t i = 1; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 	{
-        Vector3d anchorPosition_1 = anchorPosition.row(0);
-		Vector3d anchorPosition_2 = anchorPosition.row(i);
-		if ((anchorPosition_1 - anchorPosition_2).norm() > max_distance)
+		double distance = (Vector3d(anchorPosition.row(0)) - Vector3d(anchorPosition.row(i))).norm();
+		if (distance > max_distance)
 		{
-			max_distance = (anchorPosition_1 - anchorPosition_2).norm();
+			max_distance = distance;
 		}
 	}
+	target_distance_fix_point = Vector<double, LOCODECK_NR_OF_TWR_ANCHORS>(target_distance_fix_point_data);
+	sum_actual_distances_fix_point.setZero();
+	deviation_distances_fix_point.setZero();
+	counter_measurements_fix_point.setZero();
+	sum_deviation_distances_fix_point = 0.0;
+	sum_abs_deviation_distances_fix_point = 0.0;
+
+	// measurements_good = 0;
+
+	x_N = Vector3d(x_0_data);
+	vel_N = Vector3d(vel_N_data);
 
 	for (uint8_t i = 0; i < RMA_WINDOW_SIZE; i++)
 	{
@@ -118,16 +109,11 @@ int DWM1004C::init()
 
 	Schedule_Counter = 0;
 
-	#ifdef DEBUG_MODE_ON
-	target_distance_fix_point = Vector<double, LOCODECK_NR_OF_TWR_ANCHORS>(target_distance_fix_point_data);
-	sum_actual_distances_fix_point.setZero();
-	deviation_distances_fix_point.setZero();
-	counter_measurements_fix_point.setZero();
-	sum_deviation_distances_fix_point = 0.0;
-	#endif
+	lla_0 = Vector3d(lla_0_data);
 
 	return ret;
 }
+
 
 void DWM1004C::RunImpl()
 {
@@ -173,6 +159,8 @@ void DWM1004C::RunImpl()
 				}
 				else
 				{
+					PX4_INFO("Error: Communication error");
+
 					perf_count(_comms_errors);
 					dwm_errors++;
 					// _state = STATE::MEASURE;
@@ -215,7 +203,7 @@ void DWM1004C::RunImpl()
 					const uint8_t anchors_used_data_2 = data_2[1];
 
 					Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> anchors_used;
-					for (int8_t i = LOCODECK_NR_OF_TWR_ANCHORS-1; i >= 0; i--) // TODO: Vergleich mit Code bei DWM1004C: Byte wird von vorn order hinten befüllt??
+					for (int8_t i = LOCODECK_NR_OF_TWR_ANCHORS-1; i >= 0; i--) // Achtung: Vergleich mit Code bei DWM1004C: Byte wird von vorn order hinten befüllt?
 					{
 						anchors_used(i) = (anchors_used_data_1 >> i) & 0x01;
 					}
@@ -266,6 +254,7 @@ void DWM1004C::RunImpl()
 					}
 
 					sum_deviation_distances_fix_point = 0.0;
+					sum_abs_deviation_distances_fix_point = 0.0;
 
 					for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 					{
@@ -283,12 +272,13 @@ void DWM1004C::RunImpl()
 						// }
 							deviation_distances_fix_point(i) = ( sum_actual_distances_fix_point(i) / counter_measurements_fix_point(i) ) - target_distance_fix_point(i);
 							sum_deviation_distances_fix_point = sum_deviation_distances_fix_point + deviation_distances_fix_point(i);
+							sum_abs_deviation_distances_fix_point = sum_abs_deviation_distances_fix_point + fabs(deviation_distances_fix_point(i));
 						}
 					}
 
 					if (custom_method_data.deviations_counter < custom_method_data.deviations_print)
 					{
-						// PX4_INFO("max_distance = %f\n", max_distance);
+						PX4_INFO("max_distance = %f\n", max_distance);
 						for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 						{
 							// PX4_INFO("anchors_used[%d] = %d\n", i, anchors_used(i));
@@ -301,6 +291,7 @@ void DWM1004C::RunImpl()
 					if (custom_method_data.sum_deviations_counter < custom_method_data.sum_deviations_print)
 					{
 						PX4_INFO("sum_deviation_distances_fix_point = %f", sum_deviation_distances_fix_point);
+						PX4_INFO("sum_abs_deviation_distances_fix_point = %f", sum_abs_deviation_distances_fix_point);
 						custom_method_data.sum_deviations_counter++;
 					}
 
@@ -319,13 +310,13 @@ void DWM1004C::RunImpl()
 
 						// PX4_INFO_RAW("checksum: %X|%X, checksum_RX: %X|%X\n", checksum_1, checksum_2, checksum_RX_1, checksum_RX_2);
 
-						Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition(anchorPosition_data);
+						// Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> anchorPosition(anchorPosition_data);
 
 						anchors_used_sum = anchors_used.dot(anchors_used);
 
-						if (anchors_used_sum > 2) // >= 4
+						if (anchors_used_sum > 2) // TODO: checken >= 4
 						{
-							measurements_good++;
+							// measurements_good++;
 
 							// PX4_INFO_RAW("anchors_used_sum = %d\n", anchors_used_sum);
 
@@ -342,12 +333,14 @@ void DWM1004C::RunImpl()
 							while (delta_i > 0.001 && i < 100)
 							{
 								Vector3d x_ccf_i(x_ccf_i_plus_1);
-								x_ccf_i_plus_1 = dme_least_squares(x_ccf_i, anchorPosition.transpose(), measurement_1, anchors_used);
+								// x_ccf_i_plus_1 = dme_least_squares(x_ccf_i, anchorPosition.transpose(), measurement_1, anchors_used);
+								x_ccf_i_plus_1 = dme_least_squares(x_ccf_i, measurement_1, anchors_used);
 								delta_i = Vector3d (x_ccf_i_plus_1 - x_ccf_i).norm();
 								i++;
 							}
 
-							if (i < 100) // ((i < 100) || (check_inverse == false)) // TODO: checken
+							if (i < 100)
+							// if ((i < 100) || (check_inverse == false)) // TODO: checken
 							{
 								double Delta_x = (x_ccf_i_plus_1 - x_N).norm();
 								if (x_ccf_i_plus_1(0) > 0.0 && x_ccf_i_plus_1(1) > 0.0 && x_ccf_i_plus_1(2) > 0.0 && Delta_x < max_distance)
@@ -373,7 +366,7 @@ void DWM1004C::RunImpl()
 									Vector3d x_N_ema = custom_method_data.ema_alpha * x_ccf_i_plus_1 + (1 - custom_method_data.ema_alpha) * x_N_ema_minus_1;
 									Vector3d vel_N_ema = (x_N_ema - x_N_ema_minus_1) / ((double)_time_velocity_loop * 1e-6);
 									x_N_ema_minus_1 = x_N_ema;
-									if (Schedule_Counter < GPS_HOR_SPEED_DRIFT_DELAY)
+									if (Schedule_Counter < GPS_HOR_SPEED_DRIFT_DELAY) // TODO: gps_hor_speed_drift_delay)
 									{
 										Schedule_Counter++;
 									}
@@ -409,7 +402,7 @@ void DWM1004C::RunImpl()
 									perf_count(_fault_perf);
 									dwm_errors++;
 
-									PX4_INFO("Error: Measurement failure");
+									PX4_INFO("Error: Measurement bad");
 								}
 							}
 							else
@@ -461,17 +454,56 @@ void DWM1004C::RunImpl()
 				double longitude = 0.0;
 				double altitude = 0.0;
 
+				// Standard [x, y, z]-Koodinaten
 				double x_fe = x_N(0);
 				double y_fe = -x_N(1);
 				double z_fe = -x_N(2);
+				// [N, E, D]-Koodinaten
+				// double x_fe = x_N(0);
+				// double y_fe = x_N(1);
+				// double z_fe = x_N(2);
 
 				double Psi = 0.0;
+
 				flat_earth_to_lla(lla_0(0), lla_0(1), lla_0(2), x_fe, y_fe, z_fe, Psi, latitude, longitude, altitude);
 
-				Vector3f gps_vel = Vector3f(0.0, 0.0, 0.0);
-				gps_vel(0) = (float)vel_N(0);
-				gps_vel(1) = (float)-vel_N(1);
-				gps_vel(2) = (float)-vel_N(2);
+				// TODO: Checken
+				// Standard [x, y, z]-Koodinaten
+				double vel_x_fe = vel_N(0);
+				double vel_y_fe = -vel_N(1);
+				double vel_z_fe = -vel_N(2);
+				// [N, E, D]-Koodinaten
+				// double vel_x_fe = vel_N(0);
+				// double vel_y_fe = vel_N(1);
+				// double vel_z_fe = vel_N(2);
+
+				double transformation[] = {cos(math::radians(Psi)), -sin(math::radians(Psi)), sin(math::radians(Psi)), cos(math::radians(Psi))};
+				Vector2d vel_N_and_E = SquareMatrix<double, 2>(transformation) * Vector2d(vel_x_fe, vel_y_fe);
+				double vel_D = vel_z_fe;
+
+				// Vector3f gps_vel = Vector3f(0.0, 0.0, 0.0);
+				// gps_vel(0) = (float)vel_N_and_E(0);
+				// gps_vel(1) = (float)vel_N_and_E(1);
+				// gps_vel(2) = (float)vel_D;
+
+				// Vector3f gps_vel = Vector3f(0.0, 0.0, 0.0);
+				// gps_vel(0) = (float)vel_N(0);
+				// gps_vel(1) = (float)-vel_N(1);
+				// gps_vel(2) = (float)-vel_N(2);
+
+				// float gps_cog_rad = 0.0;
+				double gps_cog_rad = 0.0;
+
+				// if ((fabs(gps_vel(0)) > 0.3) || (fabs(gps_vel(1)) > 0.3))
+				if ((fabs(vel_N_and_E(0)) > 0.3) || (fabs(vel_N_and_E(1)) > 0.3))
+				{
+					// gps_cog_rad = atan2(gps_vel(1), gps_vel(0));
+					gps_cog_rad = atan2(vel_N_and_E(1), vel_N_and_E(0));
+				}
+				else
+				{
+					gps_cog_rad = NAN;
+				}
 
 				// device id
 				device::Device::DeviceId device_id;
@@ -487,12 +519,14 @@ void DWM1004C::RunImpl()
 					// fix
 					sensor_gps.s_variance_m_s = 0.4f;
 					sensor_gps.c_variance_rad = 0.1f;
-					sensor_gps.eph = 0.9f;				//0.3f
-					sensor_gps.epv = 1.78f;				//0.3f
+					sensor_gps.eph = 0.9f;				// ToDo: 0.3f;
+					sensor_gps.epv = 1.78f;				// ToDo: 0.3f;
 					sensor_gps.hdop = 0.7f;
 					sensor_gps.vdop = 1.1f;
 
 					sensor_gps.fix_type = 3; // 3D fix
+
+					sensor_gps.vel_ned_valid = custom_method_data.vel_ned_valid;
 				}
 				else
 				{
@@ -505,6 +539,9 @@ void DWM1004C::RunImpl()
 					sensor_gps.vdop = 100.f;
 
 					sensor_gps.fix_type = 0; // No fix
+
+					gps_cog_rad = NAN;
+					sensor_gps.vel_ned_valid = false;
 				}
 
 				//
@@ -520,11 +557,16 @@ void DWM1004C::RunImpl()
 				*/
 				sensor_gps.noise_per_ms = 0;
 				sensor_gps.jamming_indicator = 0;
-				sensor_gps.vel_m_s = sqrtf(gps_vel(0) * gps_vel(0) + gps_vel(1) * gps_vel(1)); // GPS ground speed, (metres/sec)
-				sensor_gps.vel_n_m_s = gps_vel(0);
-				sensor_gps.vel_e_m_s = gps_vel(1);
-				sensor_gps.vel_d_m_s = gps_vel(2);
-				sensor_gps.cog_rad = atan2(gps_vel(1), gps_vel(0)); // Course over ground (NOT heading, but direction of movement), -PI..PI, (radians)
+				// sensor_gps.vel_m_s = sqrtf(gps_vel(0) * gps_vel(0) + gps_vel(1) * gps_vel(1)); // GPS ground speed, (metres/sec)
+				sensor_gps.vel_m_s = sqrtf((float)vel_N_and_E(0) * (float)vel_N_and_E(0) + (float)vel_N_and_E(1) * (float)vel_N_and_E(1)); // GPS ground speed, (metres/sec)
+				// sensor_gps.vel_n_m_s = gps_vel(0);
+				sensor_gps.vel_n_m_s = (float)vel_N_and_E(0);
+				// sensor_gps.vel_e_m_s = gps_vel(1);
+				sensor_gps.vel_e_m_s = (float)vel_N_and_E(1);
+				// sensor_gps.vel_d_m_s = gps_vel(2);
+				sensor_gps.vel_d_m_s = (float)vel_D;
+				// sensor_gps.cog_rad = gps_cog_rad; // Course over ground (NOT heading, but direction of movement), -PI..PI, (radians)
+				sensor_gps.cog_rad = (float)gps_cog_rad; // Course over ground (NOT heading, but direction of movement), -PI..PI, (radians)
 				sensor_gps.timestamp_time_relative = 0; // TODO: nötig?
 				sensor_gps.heading = NAN;
 				sensor_gps.heading_offset = NAN;
@@ -534,7 +576,7 @@ void DWM1004C::RunImpl()
 				//
 				sensor_gps.jamming_state = 0;
 				sensor_gps.spoofing_state = 0;
-				sensor_gps.vel_ned_valid = custom_method_data.vel_ned_valid; // TODO: Anstatt Tiefpass-Filter?
+				// sensor_gps.vel_ned_valid = custom_method_data.vel_ned_valid; // TODO: Anstatt Tiefpass-Filter?
 				sensor_gps.satellites_used = anchors_used_sum;
 				/*
 				...
@@ -544,27 +586,32 @@ void DWM1004C::RunImpl()
 				//if (hrt_elapsed_time(&_timestamp_sample) < 20_ms)
 				//{
 					_sensor_gps_pub.publish(sensor_gps);
-					// PX4_INFO_RAW("elsapsed time = %lld\n", hrt_elapsed_time(&_timestamp_sample));	// TODO: Zeitmessung
+					// PX4_INFO_RAW("elsapsed time = %lld\n", hrt_elapsed_time(&_timestamp_sample));
 					perf_count(_loop_interval_perf);
 				//}
-
-				// PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
 
 				_state = STATE::MEASURE;
 				// ScheduleDelayed(10_ms);
 
 				// listener(ORB_ID(sensor_gps), 1 , -1, 0);
-				ScheduleDelayed(182_ms); // 183_ms // 5 Hz					// TODO: checken
+
+				// ScheduleDelayed(182_ms); // 183_ms // 5 Hz					// TODO: checken
+				ScheduleDelayed(custom_method_data.schedule_delayed);
 
 				break;
 			}
 	}
 
-	// Was passiert, wenn der GPS-Signal kacke ist oder keins vorhanden ist?
+	// Was passiert, wenn der GPS-Signal kacke ist oder keins vorhanden ist? -> NaN statt letzten Wert übernehmen
+	// EKF für Velocity
 	// Standardabweichung der Messung, Rauschen, Messunsicherheit
 	// ScheduleOnInterval(5000_us); // 2000 us interval, 200 Hz rate
 	// platforms/common/include/px4_platform_common/px4_work_queue/WorkQueueManager.hpp
-	// -> Zeile 63: "wq:I2C2" -> stacksizes -> 2336 -> 2656 (min. 300 bytes mehr) gegen "WARN  [load_mon] init low on stack!"
+	// -> Zeile 63: "wq:I2C2" -> stacksizes -> 2336 -> 2656 (min. 320 bytes mehr) gegen "WARN  [load_mon] init low on stack!"
+	// x,y Hebelarme Motor = [11.8000cm, 11.8000cm]
+	// Batterie 4Cells, Umax pro Zelle 4.2V,  Umin pro Zelle 1.2V
+	// Raum IFSYS = [4.11, 7.16, 2.46]
+	// .../PX4-Autopilot/ROMFS/px4fmu_common/init.d/airframes/ 4010_dji_f330 -> CMakeLists.txt -> 4010_dji_f330 -> make airframe_metadata -> make px4_fmu-v5_default
 
 	// PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
 
@@ -573,7 +620,55 @@ void DWM1004C::RunImpl()
 	perf_end(_loop_perf);
 }
 
-Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed)
+
+// Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Matrix<double, 3, LOCODECK_NR_OF_TWR_ANCHORS> &anchorPosition, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed)
+// {
+// 	Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> rho_ccf;
+//     Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> H;
+
+//     for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
+//     {
+//         if (anchorUsed(i) == 1)
+//         {
+//             rho_ccf(i) = Vector3d (x_ccf_i - anchorPosition.col(i)).norm();
+
+//             H(i, 0) = (x_ccf_i(0) - anchorPosition(0, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
+//             H(i, 1) = (x_ccf_i(1) - anchorPosition(1, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
+//             H(i, 2) = (x_ccf_i(2) - anchorPosition(2, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
+//         }
+//         else
+//         {
+//             rho_ccf(i) = 0.0;
+
+//             H(i, 0) = 0.0;
+//             H(i, 1) = 0.0;
+//             H(i, 2) = 0.0;
+//         }
+
+//     }
+
+//     Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> Delta_rho_ccf = z - rho_ccf;
+
+//     SquareMatrix<double, 3> inv_H_T_H;
+//     check_inverse = false;
+//     check_inverse = inv(SquareMatrix<double, 3> (H.transpose() * H), inv_H_T_H);
+
+//     if (check_inverse == false)
+//     {
+// 		dwm_errors++;
+// 		PX4_INFO("Error: No inverse matrix in least squares algorithm");
+//         return x_ccf_i;
+//     }
+
+//     Vector3d Delta_x_ccf = (inv_H_T_H * H.transpose()) * Delta_rho_ccf;
+
+//     Vector3d x_ccf_i_plus_1(x_ccf_i + Delta_x_ccf);
+
+//     return x_ccf_i_plus_1;
+// }
+
+
+Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> &z, const Vector<uint8_t, LOCODECK_NR_OF_TWR_ANCHORS> &anchorUsed)
 {
 	Vector<double, LOCODECK_NR_OF_TWR_ANCHORS> rho_ccf;
     Matrix<double, LOCODECK_NR_OF_TWR_ANCHORS, 3> H;
@@ -582,11 +677,11 @@ Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Matrix<doubl
     {
         if (anchorUsed(i) == 1)
         {
-            rho_ccf(i) = Vector3d (x_ccf_i - anchorPosition.col(i)).norm();
+            rho_ccf(i) = Vector3d (x_ccf_i - anchorPosition_transposed.col(i)).norm();
 
-            H(i, 0) = (x_ccf_i(0) - anchorPosition(0, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
-            H(i, 1) = (x_ccf_i(1) - anchorPosition(1, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
-            H(i, 2) = (x_ccf_i(2) - anchorPosition(2, i)) / (x_ccf_i - anchorPosition.col(i)).norm() ;
+            H(i, 0) = (x_ccf_i(0) - anchorPosition_transposed(0, i)) / (x_ccf_i - anchorPosition_transposed.col(i)).norm() ;
+            H(i, 1) = (x_ccf_i(1) - anchorPosition_transposed(1, i)) / (x_ccf_i - anchorPosition_transposed.col(i)).norm() ;
+            H(i, 2) = (x_ccf_i(2) - anchorPosition_transposed(2, i)) / (x_ccf_i - anchorPosition_transposed.col(i)).norm() ;
         }
         else
         {
@@ -619,6 +714,7 @@ Vector3d DWM1004C::dme_least_squares(const Vector3d &x_ccf_i, const Matrix<doubl
     return x_ccf_i_plus_1;
 }
 
+
 Vector3d DWM1004C::rolling_moving_average(Vector3d x)
 {
 	// Nach ChatGPT "Rolling Moving Average in C"
@@ -646,6 +742,7 @@ Vector3d DWM1004C::rolling_moving_average(Vector3d x)
 	return sum_rma / (double)RMA_WINDOW_SIZE;
 }
 
+
 void DWM1004C::flat_earth_to_lla(double lat_ref, double lon_ref, double alt_ref, double x_fe, double y_fe, double z_fe, double Psi, double &lat, double &lon, double &alt)
 {
 	// Nach Matlab Block "Flat Earth to LLA"
@@ -670,6 +767,7 @@ void DWM1004C::flat_earth_to_lla(double lat_ref, double lon_ref, double alt_ref,
 	alt = alt_ref - z_fe;
 }
 
+
 bool DWM1004C::check_algorithm()
 {
 	if (check_data == true && check_inverse == true)
@@ -683,6 +781,7 @@ bool DWM1004C::check_algorithm()
 
 	// uint64_t x = perf_event_count(_comms_errors);
 }
+
 
 void DWM1004C::custom_method(const BusCLIArguments &cli)
 {
@@ -718,14 +817,14 @@ void DWM1004C::custom_method(const BusCLIArguments &cli)
 			custom_method_data.anchors_used[cli.custom2] = 1;
 			for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 			{
-				PX4_INFO("anchor_used[%d] = %d", i, custom_method_data.anchors_used[i]);
+				PX4_INFO("anchor_used(%d) = %d", i, custom_method_data.anchors_used[i]);
 			}
 			break;
 		case 21:
 			custom_method_data.anchors_used[cli.custom2] = 0;
 			for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 			{
-				PX4_INFO("anchor_used[%d] = %d", i, custom_method_data.anchors_used[i]);
+				PX4_INFO("anchor_used(%d) = %d", i, custom_method_data.anchors_used[i]);
 			}
 			deviation_distances_fix_point(cli.custom2) = 0.0;
 			break;
@@ -755,13 +854,136 @@ void DWM1004C::custom_method(const BusCLIArguments &cli)
 			custom_method_data.vel_ned_valid = false;
 			PX4_INFO("vel_ned_valid = %s", custom_method_data.vel_ned_valid ? "true" : "false");
 			break;
-		case 90:
+		case 60:
+			gps_hor_speed_drift_delay = 2*1*SENSOR_INTERVAL_HZ;
+			custom_method_data.schedule_delayed = 183_ms;
+			PX4_INFO("driver frequency set to %d Hz.", gps_hor_speed_drift_delay/2);
+			break;
+		case 61:
+			gps_hor_speed_drift_delay = 2*2*SENSOR_INTERVAL_HZ;
+			custom_method_data.schedule_delayed = 90_ms;
+			PX4_INFO("driver frequency set to %d Hz.", gps_hor_speed_drift_delay/2);
+			break;
+		case 62:
+			gps_hor_speed_drift_delay = 2*3*SENSOR_INTERVAL_HZ;
+			custom_method_data.schedule_delayed = 60_ms;
+			PX4_INFO("driver frequency set to %d Hz.", gps_hor_speed_drift_delay/2);
+			break;
+		case 63:
+			gps_hor_speed_drift_delay = 2*4*SENSOR_INTERVAL_HZ;
+			custom_method_data.schedule_delayed = 45_ms;
+			PX4_INFO("driver frequency set to %d Hz.", gps_hor_speed_drift_delay/2);
+			break;
+		// case 70:
+		// 	anchorPosition(0, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(0, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(0, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(0) = [%f, %f, %f]", anchorPosition(0, 0), anchorPosition(0, 1), anchorPosition(0, 2));
+		// 	break;
+		// case 71:
+		// 	anchorPosition(1, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(1, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(1, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(1) = [%f, %f, %f]", anchorPosition(1, 0), anchorPosition(1, 1), anchorPosition(1, 2));
+		// 	break;
+		// case 72:
+		// 	anchorPosition(2, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(2, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(2, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(2) = [%f, %f, %f]", anchorPosition(2, 0), anchorPosition(2, 1), anchorPosition(2, 2));
+		// 	break;
+		// case 73:
+		// 	anchorPosition(3, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(3, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(3, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(3) = [%f, %f, %f]", anchorPosition(3, 0), anchorPosition(3, 1), anchorPosition(3, 2));
+		// 	break;
+		// case 74:
+		// 	anchorPosition(4, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(4, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(4, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(4) = [%f, %f, %f]", anchorPosition(4, 0), anchorPosition(4, 1), anchorPosition(4, 2));
+		// 	break;
+		// case 75:
+		// 	anchorPosition(5, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(5, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(5, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(5) = [%f, %f, %f]", anchorPosition(5, 0), anchorPosition(5, 1), anchorPosition(5, 2));
+		// 	break;
+		// case 76:
+		// 	anchorPosition(6, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(6, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(6, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(6) = [%f, %f, %f]", anchorPosition(6, 0), anchorPosition(6, 1), anchorPosition(6, 2));
+		// 	break;
+		// case 77:
+		// 	anchorPosition(7, 0) = *((double *)cli.custom_data);
+		// 	anchorPosition(7, 1) = *(((double *)cli.custom_data)+1);
+		// 	anchorPosition(7, 2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("anchorPosition(7) = [%f, %f, %f]", anchorPosition(7, 0), anchorPosition(7, 1), anchorPosition(7, 2));
+		// 	break;
+		// case 80:
+		// 	target_distance_fix_point(0) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(0) = %f", target_distance_fix_point(0));
+		// 	break;
+		// case 81:
+		// 	target_distance_fix_point(1) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(1) = %f", target_distance_fix_point(1));
+		// 	break;
+		// case 82:
+		// 	target_distance_fix_point(2) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(2) = %f", target_distance_fix_point(2));
+		// 	break;
+		// case 83:
+		// 	target_distance_fix_point(3) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(3) = %f", target_distance_fix_point(3));
+		// 	break;
+		// case 84:
+		// 	target_distance_fix_point(4) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(4) = %f", target_distance_fix_point(4));
+		// 	break;
+		// case 85:
+		// 	target_distance_fix_point(5) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(5) = %f", target_distance_fix_point(5));
+		// 	break;
+		// case 86:
+		// 	target_distance_fix_point(6) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(6) = %f", target_distance_fix_point(6));
+		// 	break;
+		// case 87:
+		// 	target_distance_fix_point(7) = *((double *)cli.custom_data);
+		// 	PX4_INFO("target_distance_fix_point(7) = %f", target_distance_fix_point(7));
+		// 	break;
+		// case 90:
+		// 	x_N(0) = *((double *)cli.custom_data);
+		// 	x_N(1) = *(((double *)cli.custom_data)+1);
+		// 	x_N(2) = *(((double *)cli.custom_data)+2);
+		// 	PX4_INFO("x_N = [%f, %f, %f]", x_N(0), x_N(1), x_N(2));
+		// 	break;
+		case 100:
+			lla_0(0) = *((double *)cli.custom_data);
+			lla_0(1) = *(((double *)cli.custom_data)+1);
+			lla_0(2) = *(((double *)cli.custom_data)+2);
+			PX4_INFO("lla_0 = [%f, %f, %f]", lla_0(0), lla_0(1), lla_0(2));
+			break;
+		// case 110:
+
+		// 	PX4_INFO("Publishing of the custom uORB message is started.");
+		// 	break;
+		// case 111:
+
+		// 	PX4_INFO("Publishing of the custom uORB message is stopped.");
+		// 	break;
+		case 120:
 			custom_method_cmd = DWM1004C_RESET;
 			transfer(&custom_method_cmd, 1, nullptr, 0);
+			counter_measurements_fix_point.setZero();
+			sum_actual_distances_fix_point.setZero();
 			PX4_INFO("The DWM1004C will be reseted.");
 			break;
 	}
 }
+
 
 void DWM1004C::print_status()
 {
@@ -797,12 +1019,10 @@ int DWM1004C::probe()
 		uint8_t data_2[3] {};
 		int ret2 = transfer(nullptr, 0, &data_2[0], sizeof(data_2));
 
-		#ifdef DEBUG_MODE_ON
 		// PX4_INFO_RAW("ret1 = %d, ret2 = %d\n", ret1, ret2);
 		// PX4_INFO_RAW("data_1[0] = %X, data_2[0] = %X\n", data_1[0], data_2[0]);
 		// PX4_INFO_RAW("data_1[1] = %X, data_2[1] = %X\n", data_1[1], data_2[1]);
 		// PX4_INFO_RAW("data_1[2] = %X, data_2[2] = %X\n", data_1[2], data_2[2]);
-		#endif
 
 		if (ret1 == PX4_OK && ret2 == PX4_OK)
 		{
