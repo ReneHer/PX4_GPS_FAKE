@@ -48,6 +48,7 @@ void DWM1004C::print_usage()
 
 	PRINT_MODULE_USAGE_COMMAND_DESCR("print", "print choosen parameters of the next <val> (default = 1) loops");
 	PRINT_MODULE_USAGE_ARG("received_data <val>", "    received data of the I2C-communication", true);
+	PRINT_MODULE_USAGE_ARG("anchors_com <val>", "  	   successfull communications between the dwm1004c and the anchors", true);
 	PRINT_MODULE_USAGE_ARG("deviations <val>", "       deviation of the meassured to the target distances between the fix point and the used anchors", true);
 	PRINT_MODULE_USAGE_ARG("sum_deviations <val>", "   sum of the deviations of the meassured to the target distances to the programmed fix point", true);
 	PRINT_MODULE_USAGE_ARG("local_coordinates <val>", "calculated local coordinates", true);
@@ -147,9 +148,21 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 				PX4_INFO_RAW("The received data will be printed for the next %d I2C-communications. -> dmesg\n", cli.custom2);
 				return ThisDriver::module_custom_method(cli, iterator);
 			}
-			else if (!strcmp(argv[2], "deviations"))
+			else if (!strcmp(argv[2], "anchors_com"))
 			{
 				cli.custom1 = 11;
+				cli.custom2 = 1;
+				if (argc >= 4)
+				{
+					cli.custom2 = atoi(argv[3]);
+				}
+				PX4_INFO_RAW("The successfull communications between the dwm1004c\n");
+				PX4_INFO_RAW("and the anchors will be printed for the next %d I2C-communications. -> dmesg\n", cli.custom2);
+				return ThisDriver::module_custom_method(cli, iterator);
+			}
+			else if (!strcmp(argv[2], "deviations"))
+			{
+				cli.custom1 = 12;
 				cli.custom2 = 1;
 				if (argc >= 4)
 				{
@@ -161,7 +174,7 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 			}
 			else if (!strcmp(argv[2], "sum_deviations"))
 			{
-				cli.custom1 = 12;
+				cli.custom1 = 13;
 				cli.custom2 = 1;
 				if (argc >= 4)
 				{
@@ -173,7 +186,7 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 			}
 			else if (!strcmp(argv[2], "local_coordinates"))
 			{
-				cli.custom1 = 13;
+				cli.custom1 = 14;
 				cli.custom2 = 1;
 				if (argc >= 4)
 				{
@@ -184,7 +197,7 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 			}
 			else if (!strcmp(argv[2], "local_velocities"))
 			{
-				cli.custom1 = 14;
+				cli.custom1 = 15;
 				cli.custom2 = 1;
 				if (argc >= 4)
 				{
@@ -195,7 +208,7 @@ extern "C" int dwm1004c_main(int argc, char *argv[])
 			}
 			else if (!strcmp(argv[2], "found_errors"))
 			{
-				cli.custom1 = 15;
+				cli.custom1 = 16;
 				cli.custom2 = 1;
 				if (argc >= 4)
 				{

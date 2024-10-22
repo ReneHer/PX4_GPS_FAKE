@@ -247,10 +247,16 @@ void DWM1004C::RunImpl()
 								status_1, status_2, anchors_used_data_1, anchors_used_data_2, checksum_1, checksum_2, checksum_RX_1, checksum_RX_2);
 						for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 						{
-							// PX4_INFO("anchors_used[%d] = %d\n", i, anchors_used(i));
 							PX4_INFO("measurement_1[%d] = %f", i, (double)measurement_1(i));
 						}
 						custom_method_data.received_data_counter++;
+					}
+
+					if (custom_method_data.anchors_com_counter < custom_method_data.anchors_com_print)
+					{
+						PX4_INFO("anchors_com = [%d, %d, %d, %d, %d, %d, %d, %d]", anchors_used(0), anchors_used(1), anchors_used(2),
+								anchors_used(3), anchors_used(4), anchors_used(5), anchors_used(6), anchors_used(7));
+						custom_method_data.anchors_com_counter++;
 					}
 
 					sum_deviation_distances_fix_point = 0.0;
@@ -278,7 +284,7 @@ void DWM1004C::RunImpl()
 
 					if (custom_method_data.deviations_counter < custom_method_data.deviations_print)
 					{
-						PX4_INFO("max_distance = %f\n", max_distance);
+						// PX4_INFO("max_distance = %f\n", max_distance);
 						for (uint8_t i = 0; i < LOCODECK_NR_OF_TWR_ANCHORS; i++)
 						{
 							// PX4_INFO("anchors_used[%d] = %d\n", i, anchors_used(i));
@@ -339,8 +345,8 @@ void DWM1004C::RunImpl()
 								i++;
 							}
 
-							if (i < 100)
-							// if ((i < 100) || (check_inverse == false)) // TODO: checken
+							// if (i < 100)
+							if ((i < 100) || (check_inverse == false)) // TODO: checken
 							{
 								double Delta_x = (x_ccf_i_plus_1 - x_N).norm();
 								if (x_ccf_i_plus_1(0) > 0.0 && x_ccf_i_plus_1(1) > 0.0 && x_ccf_i_plus_1(2) > 0.0 && Delta_x < max_distance)
@@ -610,7 +616,6 @@ void DWM1004C::RunImpl()
 	// -> Zeile 63: "wq:I2C2" -> stacksizes -> 2336 -> 2656 (min. 320 bytes mehr) gegen "WARN  [load_mon] init low on stack!"
 	// x,y Hebelarme Motor = [11.8000cm, 11.8000cm]
 	// Batterie 4Cells, Umax pro Zelle 4.2V,  Umin pro Zelle 1.2V
-	// Raum IFSYS = [4.11, 7.16, 2.46]
 	// .../PX4-Autopilot/ROMFS/px4fmu_common/init.d/airframes/ 4010_dji_f330 -> CMakeLists.txt -> 4010_dji_f330 -> make airframe_metadata -> make px4_fmu-v5_default
 
 	// PX4_INFO_RAW("sensor_gps.satellites_used = %d\n", sensor_gps.satellites_used);
@@ -794,22 +799,26 @@ void DWM1004C::custom_method(const BusCLIArguments &cli)
 			custom_method_data.received_data_counter = 0;
 			break;
 		case 11:
+			custom_method_data.anchors_com_print = cli.custom2;
+			custom_method_data.anchors_com_counter = 0;
+			break;
+		case 12:
 			custom_method_data.deviations_print = cli.custom2;
 			custom_method_data.deviations_counter = 0;
 			break;
-		case 12:
+		case 13:
 			custom_method_data.sum_deviations_print = cli.custom2;
 			custom_method_data.sum_deviations_counter = 0;
 			break;
-		case 13:
+		case 14:
 			custom_method_data.local_coordinates_print = cli.custom2;
 			custom_method_data.local_coordinates_counter = 0;
 			break;
-		case 14:
+		case 15:
 			custom_method_data.local_velocities_print = cli.custom2;
 			custom_method_data.local_velocities_counter = 0;
 			break;
-		case 15:
+		case 16:
 			custom_method_data.found_errors_print = cli.custom2;
 			custom_method_data.found_errors_counter = 0;
 			break;
